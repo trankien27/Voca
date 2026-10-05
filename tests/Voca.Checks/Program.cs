@@ -313,11 +313,115 @@ Check(md.MistakeDay is null && cancelled.Count == 20 && md.Mistakes.Count == 1, 
 MistakeDays.Schedule(md, d2.AddDays(1), d2);
 Check(MistakeDays.Active(md, d2.AddDays(4)) is not null, "mistakes: a missed mistake day is still waiting days later");
 Check(MistakeDays.Schedule(new AppData(), d1, d0) == 0, "mistakes: nothing to schedule without wrong words");
+
+// ---- mistake lists ----
+var ml = new AppData();
+SeedData.EnsureSeeded(ml);
+var mlPlan = ml.Plans[0];
+var mlDay1 = CourseEngine.BuildToday(ml, d0, out var mlFresh);
+CourseEngine.ApplySession(ml, mlDay1.Select((w, i) => (w, i >= 2)).ToList(), mlFresh, d0.AddHours(8));
+var sessionList = ml.MistakeLists.Single();
+Check(sessionList.Title == MistakeDays.SessionTitle(d0) && sessionList.WordIds.Count == 2, "lists: a session's wrong words make the day's list");
+var t1 = d0.AddHours(9);
+var testListId = MistakeDays.Record(ml, [mlDay1[0], mlPlan.Words[40], mlPlan.Words[41]], t1, "Bài kiểm tra 09:00 · Education", null);
+Check(ml.MistakeLists.Count == 2 && ml.MistakeLists.Single(l => l.Id == testListId).WordIds.Count == 3,
+    "lists: a test makes its own list, including a word already in another list");
+Check(MistakeDays.Record(ml, [mlPlan.Words[40]], t1.AddMinutes(2), "ignored", testListId) == testListId && ml.MistakeLists.Count == 2,
+    "lists: a retry round adds to the same test list");
+var t2Id = MistakeDays.Record(ml, [mlPlan.Words[42]], d0.AddHours(11), "Bài kiểm tra 11:00 · Education", null);
+Check(t2Id != testListId && ml.MistakeLists.Count == 3, "lists: a later test gets a new list");
+CourseEngine.ApplySession(ml, [(mlPlan.Words[40], false), (mlPlan.Words[43], false)], [], d0.AddHours(20));
+Check(sessionList.WordIds.Contains(mlPlan.Words[43].Id) && !sessionList.WordIds.Contains(mlPlan.Words[40].Id),
+    "lists: the day's session list only adds words not already in a list");
+Check(MistakeDays.Lists(ml)[0].List.Id == t2Id, "lists: newest list first");
+var positionBefore = (ml.Position.Day, ml.Position.DayCompleted);
+var practiceWords = MistakeDays.Lists(ml).Single(x => x.List.Id == testListId).Words;
+MistakeDays.ApplyPractice(ml, practiceWords.Select(w => (w, w != mlPlan.Words[41])).ToList(), d0.AddHours(21));
+Check(ml.MistakeLists.Single(l => l.Id == testListId).WordIds.SequenceEqual([mlPlan.Words[41].Id]),
+    "lists: practice removes words answered right, keeps the wrong one");
+Check(!sessionList.WordIds.Contains(mlDay1[0].Id) && ml.Mistakes.All(m => m.WordId != mlDay1[0].Id),
+    "lists: a word answered right leaves every list and the count");
+Check((ml.Position.Day, ml.Position.DayCompleted) == positionBefore && MistakeDays.TimesWrong(ml, mlPlan.Words[41]) == 2,
+    "lists: practice does not move the course; a wrong answer is counted again");
+MistakeDays.ApplyPractice(ml, [(mlPlan.Words[42], true)], d0.AddHours(22));
+Check(ml.MistakeLists.All(l => l.Id != t2Id), "lists: a list with every word answered right disappears");
+MistakeDays.Record(ml, [mlPlan.Words[50]], d0.AddHours(22));
+Check(MistakeDays.Tidy(ml, d0.AddHours(23)) && ml.MistakeLists.Any(l => l.Title == MistakeDays.EarlierTitle && l.WordIds.Contains(mlPlan.Words[50].Id)),
+    "lists: wrong words from before lists existed are gathered in one list");
+Check(!MistakeDays.Tidy(ml, d0.AddHours(23)), "lists: tidying twice changes nothing");
+MistakeDays.Record(ml, [mlPlan.Words[41]], d0.AddHours(23), MistakeDays.SessionTitle(d0));
+MistakeDays.DeleteList(ml, testListId!.Value);
+Check(ml.MistakeLists.All(l => l.Id != testListId) && MistakeDays.TimesWrong(ml, mlPlan.Words[41]) > 0,
+    "lists: deleting a list keeps words that are still in another list");
+var earlier = ml.MistakeLists.Single(l => l.Title == MistakeDays.EarlierTitle);
+MistakeDays.DeleteList(ml, earlier.Id);
+Check(MistakeDays.TimesWrong(ml, mlPlan.Words[50]) == 0, "lists: deleting a list drops words found only there");
+Check(MistakeDays.Schedule(ml, d1, d0, [mlPlan.Words[41].Id]) == 1 && ml.MistakeDay!.WordIds.Single() == mlPlan.Words[41].Id,
+    "lists: a list can be scheduled as tomorrow's mistake day");
 var orphan = new AppData();
 SeedData.EnsureSeeded(orphan);
 orphan.MistakeDay = new MistakeDay { Date = d0, WordIds = [Guid.NewGuid()] };
 var orphanToday = CourseEngine.BuildToday(orphan, d0, out var orphanFresh);
 CourseEngine.ApplySession(orphan, orphanToday.Select(w => (w, true)).ToList(), orphanFresh, d0.AddHours(9));
 Check(orphanFresh.Count == 20 && orphan.Position.DayCompleted && orphan.MistakeDay is null, "mistakes: a mistake day whose words were deleted falls back to the course day");
+// ---- self-update ----
+Check(Updater.ParseTag("v2.7.0") == new Version(2, 7, 0, 0) && Updater.ParseTag("2.7") == new Version(2, 7, 0, 0) && Updater.ParseTag("latest") is null,
+    "update: release tags v2.7.0 / 2.7 are read, others ignored");
+Check(Updater.IsNewer(new Version(2, 10, 0), new Version(2, 9, 5)) && !Updater.IsNewer(new Version(2, 6, 1), new Version(2, 6, 1, 0))
+      && !Updater.IsNewer(new Version(2, 6, 0), new Version(2, 6, 1)), "update: version comparison (2.10 > 2.9, 2.6.1 = 2.6.1.0)");
+var shaLine = new string('a', 64);
+Check(Updater.ParseSha256($"{shaLine.ToUpperInvariant()}  Voca.exe\n") == shaLine && Updater.ParseSha256("no hash") is null, "update: reads the .sha256 file");
+const string releaseJson = """
+    { "tag_name": "v2.7.0", "draft": false, "prerelease": false, "body": "Notes",
+      "assets": [ { "name": "Voca.exe", "size": 1234, "browser_download_url": "https://x/Voca.exe" },
+                  { "name": "Voca.exe.sha256", "size": 80, "browser_download_url": "https://x/Voca.exe.sha256" } ] }
+    """;
+var release = Updater.ParseRelease(releaseJson);
+Check(release is { Tag: "v2.7.0", Size: 1234, ExeUrl: "https://x/Voca.exe", Sha256Url: "https://x/Voca.exe.sha256", Notes: "Notes" }
+      && release.Version == new Version(2, 7, 0, 0), "update: GitHub release answer is read");
+Check(Updater.ParseRelease(releaseJson.Replace("\"draft\": false", "\"draft\": true")) is null
+      && Updater.ParseRelease(releaseJson.Replace("\"Voca.exe\", \"size\"", "\"Other.exe\", \"size\"")) is null,
+    "update: drafts and releases without Voca.exe are ignored");
+const string releasesJson = """
+    [ { "tag_name": "v2.6.9", "draft": false, "prerelease": false, "published_at": "2026-10-01T08:00:00Z",
+        "assets": [ { "name": "Voca.exe", "size": 10, "browser_download_url": "https://x/a" } ] },
+      { "tag_name": "v2.8.0", "draft": false, "prerelease": false, "published_at": "2026-10-09T08:00:00Z", "body": "- Tab Từ sai\n- Sửa nút",
+        "assets": [ { "name": "Voca.exe", "size": 10, "browser_download_url": "https://x/b" } ] },
+      { "tag_name": "v2.9.0", "draft": true, "assets": [ { "name": "Voca.exe", "browser_download_url": "https://x/c" } ] },
+      { "tag_name": "v2.7.5", "draft": false, "prerelease": false, "assets": [ { "name": "Notes.txt", "browser_download_url": "https://x/d" } ] },
+      { "tag_name": "v2.7.0", "draft": false, "prerelease": false, "assets": [ { "name": "Voca.exe", "browser_download_url": "https://x/e" } ] } ]
+    """;
+var versions = Updater.ParseReleases(releasesJson);
+Check(versions.Select(v => v.Version.ToString(3)).SequenceEqual(["2.8.0", "2.7.0", "2.6.9"]),
+    "update: version list is newest first, without drafts or releases lacking Voca.exe");
+Check(versions[0].PublishedAt?.Date == new DateTime(2026, 10, 9) && versions[0].Notes.Contains("Tab Từ sai") && versions[1].PublishedAt is null,
+    "update: list shows release date and notes when GitHub has them");
+Check(Updater.ParseReleases("[]").Count == 0 && Updater.ParseReleases("{}").Count == 0, "update: no releases → empty list");
+var upDir = Path.Combine(Path.GetTempPath(), "voca-update-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(upDir);
+var payload = Path.Combine(upDir, "payload.bin");
+File.WriteAllBytes(payload, [1, 2, 3, 4]);
+var payloadHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(payload))).ToLowerInvariant();
+var info = new UpdateInfo(new Version(2, 7, 0, 0), "v2.7.0", "u", 4, "h", "");
+bool Throws(Action action) { try { action(); return false; } catch (InvalidOperationException) { return true; } }
+Check(!Throws(() => Updater.Verify(payload, info, payloadHash)) && Throws(() => Updater.Verify(payload, info, shaLine))
+      && Throws(() => Updater.Verify(payload, info with { Size = 5 }, payloadHash)), "update: download kept only when size and SHA-256 match");
+File.WriteAllText(Path.Combine(upDir, "Voca-2.7.0.exe"), "new");
+File.WriteAllText(Path.Combine(upDir, "Voca-2.8.0.exe.part"), "partial");
+var app = Path.Combine(upDir, "app");
+Directory.CreateDirectory(app);
+var exe = Path.Combine(app, "Voca.exe");
+File.WriteAllText(exe, "running 2.6.1");
+Updater.Swap(exe, Path.Combine(upDir, "Voca-2.7.0.exe"));
+Check(File.ReadAllText(exe) == "new" && File.ReadAllText(exe + ".old") == "running 2.6.1", "update: swap puts the new exe in place and keeps the old one aside");
+File.WriteAllText(exe, "2.7.0");
+Check(Throws(() => { try { Updater.Swap(exe, Path.Combine(upDir, "missing.exe")); } catch (FileNotFoundException) { throw new InvalidOperationException(); } })
+      && File.ReadAllText(exe) == "2.7.0", "update: a failed swap puts the running exe back");
+Updater.CleanUp(exe, upDir);
+Check(!File.Exists(exe + ".old") && Directory.GetFiles(upDir).Length == 0, "update: clean-up removes the old exe and leftover downloads");
+Directory.Delete(upDir, true);
+Check(!Updater.Enabled(@"D:\PersonalProject\voca\bin\Release\net8.0-windows\Voca.exe") && Updater.Enabled(@"D:\Apps\Voca\Voca.exe"),
+    "update: builds run from bin\\ never update themselves");
+
 Console.WriteLine(fails == 0 ? "\nALL PASSED" : $"\n{fails} FAILED");
 return fails == 0 ? 0 : 1;

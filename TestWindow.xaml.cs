@@ -27,6 +27,9 @@ public partial class TestWindow : Window
     private readonly Store _store;
     private readonly bool _canListen;
     private readonly Action<string> _speak;
+    private readonly AppActions _actions;
+    /// <summary>The mistake list of this test; retry rounds add to it instead of making new lists.</summary>
+    private Guid? _listId;
     private readonly Stopwatch _clock = new();
     private (int From, int To)? _requestedRange;
     private Stage _stage;
@@ -42,15 +45,16 @@ public partial class TestWindow : Window
     private sealed record ResultRow(string Mark, Brush MarkBrush, string Word, string Meaning, string Given, Visibility GivenVisibility, string Kind);
     private sealed record CountItem(int Count, string Label) { public override string ToString() => Label; }
 
-    public TestWindow(Store store, Guid? planId, int? fromDay, int? toDay, bool canListen, Action<string> speak)
+    public TestWindow(Store store, Guid? planId, int? fromDay, int? toDay, AppActions actions)
     {
         InitializeComponent();
         _store = store;
-        _canListen = canListen;
-        _speak = speak;
+        _actions = actions;
+        _canListen = actions.CanListen;
+        _speak = actions.Speak;
         if (fromDay is int f && toDay is int t) _requestedRange = (Math.Min(f, t), Math.Max(f, t));
 
-        if (!canListen)
+        if (!_canListen)
         {
             KindListening.IsChecked = false;
             KindListening.IsEnabled = false;
@@ -125,6 +129,7 @@ public partial class TestWindow : Window
         if (SelectedPlan is not { } plan) return;
         var count = (CountBox.SelectedItem as CountItem)?.Count ?? 20;
         var words = TestBuilder.Pick(TestBuilder.Pool(plan, FromDay, ToDay), count, Random.Shared);
+        _listId = null;
         _scope = FromDay == ToDay ? $"{plan.Name} · ngày {FromDay}" : $"{plan.Name} · ngày {FromDay}–{ToDay}";
         Start(words, ChosenKinds());
     }
@@ -341,53 +346,21 @@ public partial class TestWindow : Window
         NextButton.Content = "Đóng";
         FooterText.Text = wrong ? "Kết quả không làm thay đổi lịch ôn tập." : "";
 
-        // Wrong words are kept for a mistake day (the review schedule stays as it is).
+        // Wrong words go to this test's mistake list (the review schedule stays as it is).
         var wrongWords = WrongWords();
-        if (wrongWords.Count > 0) _store.Update(d => MistakeDays.Record(d, wrongWords, DateTime.Now));
-        RenderOffer(wrongWords.Count);
+        if (wrongWords.Count > 0)
+        {
+            var now = DateTime.Now;
+            _store.Update(d => _listId = MistakeDays.Record(d, wrongWords, now, $"Bài kiểm tra {now:HH:mm} · {_scope.Replace(" · câu sai", "")}", _listId));
+        }
+        MistakeOffer.Visibility = wrongWords.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        OfferText.Text = $"Đã lưu {wrongWords.Count} từ sai vào danh sách từ sai. Học lại ngay, hoặc mở danh sách để để dành học sau (có thể hẹn sang ngày mai).";
     }
 
-    /// <summary>Offers to turn the wrong words into a mistake day, or says which day they joined.</summary>
-    private void RenderOffer(int recorded)
-    {
-        MistakeOffer.Visibility = recorded > 0 ? Visibility.Visible : Visibility.Collapsed;
-        if (recorded == 0) return;
-        var data = _store.Data;
-        var today = DateTime.Today;
-        OfferTodayButton.Visibility = OfferTomorrowButton.Visibility = Visibility.Collapsed;
-        if (MistakeDays.Active(data, today) is { Done: false } active)
-        {
-            OfferText.Text = $"Đã thêm {recorded} từ sai vào ngày học từ sai hôm nay ({MistakeDays.WordsOf(data, active).Count} từ).";
-        }
-        else if (MistakeDays.Upcoming(data, today) is { } upcoming)
-        {
-            var when = upcoming.Date.Date == today.AddDays(1) ? "ngày mai" : $"ngày {upcoming.Date:dd/MM}";
-            OfferText.Text = $"Đã thêm {recorded} từ sai vào ngày học từ sai {when} ({MistakeDays.WordsOf(data, upcoming).Count} từ).";
-            OfferTodayButton.Content = "Học ngay hôm nay";
-            OfferTodayButton.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            var waiting = MistakeDays.Waiting(data).Count;
-            OfferText.Text = $"Đã lưu {recorded} từ sai (danh sách từ sai có {waiting} từ). Tạo một ngày học riêng cho các từ này? " +
-                             "Ngày đó thay cho bài của lộ trình, hôm sau học tiếp.";
-            OfferTodayButton.Content = "Học hôm nay";
-            OfferTodayButton.Visibility = OfferTomorrowButton.Visibility = Visibility.Visible;
-        }
-    }
+    private void OfferPractice_Click(object sender, RoutedEventArgs e) =>
+        _actions.Practice(WrongWords(), $"Học lại từ sai · {_scope.Replace(" · câu sai", "")}");
 
-    private void ScheduleMistakeDay(DateTime date)
-    {
-        var count = 0;
-        _store.Update(d => count = MistakeDays.Schedule(d, date, DateTime.Today));
-        OfferTodayButton.Visibility = OfferTomorrowButton.Visibility = Visibility.Collapsed;
-        OfferText.Text = date.Date == DateTime.Today
-            ? $"✓ Hôm nay là ngày học {count} từ sai. Bấm “Bắt đầu học từ sai” trên popup của taskbar (hoặc menu khay → Bắt đầu phiên học)."
-            : $"✓ Đã hẹn ngày mai học {count} từ sai. Muốn học sớm hơn thì bấm “Học ngay hôm nay” trên popup của taskbar.";
-    }
-
-    private void OfferToday_Click(object sender, RoutedEventArgs e) => ScheduleMistakeDay(DateTime.Today);
-    private void OfferTomorrow_Click(object sender, RoutedEventArgs e) => ScheduleMistakeDay(DateTime.Today.AddDays(1));
+    private void OfferOpenList_Click(object sender, RoutedEventArgs e) => _actions.OpenMistakes();
 
     private List<Word> WrongWords() => _answers.Where(a => !a.Correct).Select(a => a.Question.Word).Distinct().ToList();
 

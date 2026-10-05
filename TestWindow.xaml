@@ -106,8 +106,8 @@
                 <Border x:Name="MistakeOffer" Background="#FFF6ED" CornerRadius="10" Padding="12,8" Margin="0,0,0,10" Visibility="Collapsed">
                     <DockPanel>
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button x:Name="OfferTodayButton" Content="Học hôm nay" Click="OfferToday_Click" Background="#B54708" Foreground="White"/>
-                            <Button x:Name="OfferTomorrowButton" Content="Để ngày mai" Click="OfferTomorrow_Click" Background="#FEDFC4" Foreground="#93370D"/>
+                            <Button x:Name="OfferPracticeButton" Content="▶ Học ngay" Click="OfferPractice_Click" Background="#B54708" Foreground="White"/>
+                            <Button Content="Xem danh sách từ sai" Click="OfferOpenList_Click" Background="#FEDFC4" Foreground="#93370D"/>
                         </StackPanel>
                         <TextBlock x:Name="OfferText" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{StaticResource Ink}"/>
                     </DockPanel>
@@ -137,7 +137,8 @@
                     <Button x:Name="RetryWrongButton" Content="Làm lại câu sai" Click="RetryWrong_Click" Visibility="Collapsed"/>
                     <Button x:Name="NewTestButton" Content="Bài mới" Click="NewTest_Click" Visibility="Collapsed"/>
                     <Button x:Name="BackButton" Content="Câu trước" Click="Back_Click" Visibility="Collapsed"/>
-                    <Button x:Name="NextButton" Content="Bắt đầu" Click="Next_Click" Background="{StaticResource Accent}" Foreground="White"/>
+                    <Button x:Name="NextButton" Content="Bắt đầu" Click="Next_Click" Background="{StaticResource Accent}" Foreground="White"
+                            FontWeight="SemiBold" Padding="20,8" MinWidth="110"/>
                 </StackPanel>
                 <TextBlock x:Name="FooterText" VerticalAlignment="Center" Foreground="{StaticResource Muted}" TextTrimming="CharacterEllipsis"/>
             </DockPanel>

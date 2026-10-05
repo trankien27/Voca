@@ -53,6 +53,8 @@
                                     Background="{StaticResource Accent}" Foreground="White" HorizontalAlignment="Stretch"/>
                         </StackPanel>
                     </Border>
+                    <Button x:Name="MistakesLink" Click="MistakesLink_Click" Visibility="Collapsed" HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Left" Background="#FFF6ED" Foreground="#93370D" Padding="10,6" Margin="0,0,0,8" FontSize="12"/>
                     <Border x:Name="MistakePanel" Background="#FFF6ED" CornerRadius="10" Padding="10,8" Margin="0,0,0,8" Visibility="Collapsed">
                         <StackPanel>
                             <TextBlock x:Name="MistakeText" FontSize="12" Foreground="{StaticResource Ink}" TextWrapping="Wrap"/>

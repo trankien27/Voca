@@ -249,7 +249,7 @@ public static class CourseEngine
         }
         foreach (var word in newWords) word.IntroducedOn ??= now.Date;
 
-        MistakeDays.Record(data, answers.Where(a => !a.Correct).Select(a => a.Word), now);
+        MistakeDays.Record(data, answers.Where(a => !a.Correct).Select(a => a.Word), now, MistakeDays.SessionTitle(now), onlyUnlisted: true);
 
         var key = ReviewScheduler.Key(now);
         var log = data.StudyLog.TryGetValue(key, out var existing) ? existing : data.StudyLog[key] = new DayLog();

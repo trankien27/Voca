@@ -31,6 +31,8 @@ public partial class MainWindow : Window
     private LibraryWindow? _libraryWindow;
     private StatsWindow? _statsWindow;
     private SessionWindow? _sessionWindow;
+    /// <summary>What clicking the last tray balloon does (start the session, or install an update).</summary>
+    private Action _balloonAction;
     private System.Windows.Point _dragStart;
     private DateTime _mouseDownAt;
     private bool _dragging;
@@ -43,7 +45,8 @@ public partial class MainWindow : Window
         InitializeComponent();
         _tray = new NotifyIcon { Icon = LoadAppIcon(), Text = "Voca", Visible = true };
         _tray.DoubleClick += (_, _) => OpenLibrary();
-        _tray.BalloonTipClicked += (_, _) => Dispatcher.Invoke(OpenSession);
+        _balloonAction = OpenSession;
+        _tray.BalloonTipClicked += (_, _) => Dispatcher.Invoke(_balloonAction);
         _tray.ContextMenuStrip = BuildTrayMenu();
         _hasEnglishVoice = SelectEnglishVoice();
         _timer.Tick += (_, _) => RotateWord();
@@ -51,7 +54,7 @@ public partial class MainWindow : Window
         _topmostTimer.Tick += (_, _) => { RefreshForNewDay(); UpdateVisibilityForFullScreen(); KeepAboveTaskbar(); MaybeNotify(); };
         // Any change saved by any window (library, session, stats) refreshes the taskbar word.
         _store.Changed += () => Dispatcher.Invoke(Reload);
-        Loaded += (_, _) => { Reload(); RestoreOrSetDefaultPosition(); KeepAboveTaskbar(); _topmostTimer.Start(); };
+        Loaded += (_, _) => { Reload(); RestoreOrSetDefaultPosition(); KeepAboveTaskbar(); _topmostTimer.Start(); SayIfUpdated(); };
         // Pause rotation while the detail popup is open so the word being read stays put.
         DetailPopup.Opened += (_, _) => _timer.Stop();
         DetailPopup.Closed += (_, _) => _timer.Start();
@@ -86,6 +89,8 @@ public partial class MainWindow : Window
         var menu = new ContextMenuStrip();
         menu.Items.Add("Bắt đầu phiên học", null, (_, _) => Dispatcher.Invoke(OpenSession));
         menu.Items.Add("Tạo bài kiểm tra", null, (_, _) => Dispatcher.Invoke(OpenTest));
+        menu.Items.Add("Danh sách từ sai", null, (_, _) => Dispatcher.Invoke(OpenMistakes));
+        menu.Items.Add("Cập nhật phiên bản…", null, (_, _) => Dispatcher.Invoke(OpenUpdates));
         menu.Items.Add("Thư viện và cài đặt", null, (_, _) => Dispatcher.Invoke(OpenLibrary));
         menu.Items.Add("Thống kê học tập", null, (_, _) => Dispatcher.Invoke(OpenStats));
         menu.Items.Add("Thoát", null, (_, _) => Dispatcher.Invoke(() => { _tray.Visible = false; Close(); System.Windows.Application.Current.Shutdown(); }));
@@ -100,7 +105,9 @@ public partial class MainWindow : Window
         {
             var today = DateTime.Today;
             var moved = CourseEngine.Advance(_data, today);
-            if (MistakeDays.Cleanup(_data, today) || moved) _store.Save();
+            var cleaned = MistakeDays.Cleanup(_data, today);
+            var tidied = MistakeDays.Tidy(_data, DateTime.Now);
+            if (moved || cleaned || tidied) _store.Save();
             var dateChanged = _loadedDate != today;
             var currentId = !dateChanged && _index < _today.Count ? _today[_index].Id : (Guid?)null;
             var list = CourseEngine.BuildToday(_data, today, out _fresh);
@@ -210,6 +217,7 @@ public partial class MainWindow : Window
         if (!_notified.Add($"{now:yyyy-MM-dd}-{(evening ? "evening" : "day")}")) return;
         var reviews = _today.Count - _fresh.Count;
         var mistakeDay = MistakeDays.Active(_data, DateTime.Today) is not null;
+        _balloonAction = OpenSession;
         _tray.ShowBalloonTip(15000, mistakeDay ? "Voca · Ngày học từ sai" : $"Voca · {plan.Name} · Ngày {position.Day}/{plan.DayCount}",
             $"{(evening ? "Bạn chưa học hôm nay. " : "")}{_fresh.Count} {(mistakeDay ? "từ sai" : "từ mới")} · {reviews} từ cần ôn. Bấm để bắt đầu.", ToolTipIcon.None);
     }
@@ -354,6 +362,8 @@ public partial class MainWindow : Window
         var active = MistakeDays.Active(_data, today);
         var upcoming = MistakeDays.Upcoming(_data, today);
         var waiting = MistakeDays.Waiting(_data).Count;
+        MistakesLink.Visibility = waiting > 0 ? Visibility.Visible : Visibility.Collapsed;
+        MistakesLink.Content = $"📋 {waiting} từ sai · Xem danh sách và học lại";
         void Buttons(string? todayText, string? tomorrowText, bool cancel)
         {
             MistakeTodayButton.Visibility = todayText is null ? Visibility.Collapsed : Visibility.Visible;
@@ -374,17 +384,13 @@ public partial class MainWindow : Window
             MistakeText.Text = $"📌 Đã hẹn học {MistakeDays.WordsOf(_data, upcoming).Count} từ sai vào {when}. Lộ trình nghỉ ngày đó, hôm sau học tiếp.";
             Buttons("Học ngay hôm nay", null, cancel: true);
         }
-        else if (active is null && waiting >= MistakeDays.SuggestAt)
-        {
-            var cap = waiting > MistakeDays.MaxWords ? $" ({MistakeDays.MaxWords} từ sai nhiều nhất)" : "";
-            MistakeText.Text = $"Bạn có {waiting} từ hay làm sai. Tạo một ngày học riêng cho các từ này{cap}?";
-            Buttons("Học hôm nay", "Để ngày mai", cancel: false);
-        }
         else
         {
             MistakePanel.Visibility = Visibility.Collapsed;
         }
     }
+
+    private void MistakesLink_Click(object sender, RoutedEventArgs e) => OpenMistakes();
 
     private void MistakeToday_Click(object sender, RoutedEventArgs e) =>
         _store.Update(d => MistakeDays.Schedule(d, DateTime.Today, DateTime.Today));
@@ -436,7 +442,8 @@ public partial class MainWindow : Window
         var mistakeDay = MistakeDays.Active(_data, DateTime.Today) is not null && fresh.Count > 0;
         var courseText = mistakeDay ? $"Ngày học từ sai · {fresh.Count} từ"
             : CourseEngine.Current(_data) is var (plan, _) ? $"{plan.Name} · Ngày {_data.Position.Day}/{plan.DayCount}" : "";
-        _sessionWindow = new SessionWindow(_data, fresh, reviews, courseText, FinishSession, Speak, mistakeDay);
+        _sessionWindow = new SessionWindow(_data, fresh, reviews, courseText, FinishSession, Speak,
+            mistakeDay ? SessionMode.MistakeDay : SessionMode.Course);
         _sessionWindow.Closed += (_, _) => _sessionWindow = null;
         _sessionWindow.Show();
         _sessionWindow.Activate();
@@ -450,6 +457,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            _balloonAction = () => { };
             _tray.ShowBalloonTip(8000, "Voca", $"Không lưu được kết quả: {ex.Message}", ToolTipIcon.Warning);
         }
     }
@@ -739,10 +747,61 @@ public partial class MainWindow : Window
     private void OpenTest()
     {
         DetailPopup.IsOpen = false;
-        new TestWindow(_store, null, null, null, _hasEnglishVoice, Speak).Show();
+        new TestWindow(_store, null, null, null, Actions).Show();
+    }
+
+    private AppActions Actions => new(Speak, _hasEnglishVoice, OpenStats, OpenMistakes, OpenPractice);
+
+    // ---------------------------------- updates ----------------------------------
+
+    /// <summary>Once after switching version (update or going back): a short tray note.</summary>
+    private void SayIfUpdated()
+    {
+        var current = Updater.Current.ToString(3);
+        if (_data.Settings.LastVersion == current) return;
+        var hadVersion = Version.TryParse(_data.Settings.LastVersion, out var last);
+        _store.Update(d => d.Settings.LastVersion = current);
+        if (!hadVersion) return;
+        _balloonAction = () => { };
+        _tray.ShowBalloonTip(8000, "Voca", Updater.IsNewer(Updater.Current, last!)
+            ? $"Đã cập nhật lên Voca {current}." : $"Đã chuyển về Voca {current}.", ToolTipIcon.Info);
+    }
+
+    /// <summary>Opens the library on Settings → "Cập nhật phiên bản" (the version list).</summary>
+    private void OpenUpdates()
+    {
+        OpenLibrary();
+        _libraryWindow?.ShowUpdates();
     }
 
     private void Test_Click(object sender, RoutedEventArgs e) => OpenTest();
+
+    /// <summary>Opens the library on its "Từ sai" tab.</summary>
+    private void OpenMistakes()
+    {
+        OpenLibrary();
+        _libraryWindow?.ShowMistakes();
+    }
+
+    /// <summary>
+    /// A session over wrong words outside the course (flash cards, then the quiz). Right answers leave
+    /// the mistake lists; the course day is not affected.
+    /// </summary>
+    private void OpenPractice(IReadOnlyList<Word> words, string title)
+    {
+        DetailPopup.IsOpen = false;
+        if (words.Count == 0) return;
+        if (_sessionWindow is not null)
+        {
+            _sessionWindow.Activate();
+            return;
+        }
+        _sessionWindow = new SessionWindow(_data, words, [], title,
+            (answers, _) => _store.Update(d => MistakeDays.ApplyPractice(d, answers, DateTime.Now)), Speak, SessionMode.Practice);
+        _sessionWindow.Closed += (_, _) => _sessionWindow = null;
+        _sessionWindow.Show();
+        _sessionWindow.Activate();
+    }
 
     private void OpenLibrary()
     {
@@ -753,7 +812,7 @@ public partial class MainWindow : Window
             _libraryWindow.Activate();
             return;
         }
-        _libraryWindow = new LibraryWindow(_store, OpenStats, Speak, _hasEnglishVoice);
+        _libraryWindow = new LibraryWindow(_store, Actions);
         _libraryWindow.Closed += (_, _) => _libraryWindow = null;
         _libraryWindow.Show();
         _libraryWindow.Activate();

@@ -20,6 +20,8 @@ public sealed class AppData
     public bool ImportedFromV1 { get; set; }
     /// <summary>Words answered wrong (tests and sessions) that are waiting for a mistake day.</summary>
     public List<MistakeEntry> Mistakes { get; set; } = [];
+    /// <summary>Wrong words grouped by where they came from (one list per test, one per day of sessions).</summary>
+    public List<MistakeList> MistakeLists { get; set; } = [];
     /// <summary>The scheduled mistake day, if any; on that day it replaces the course lesson.</summary>
     public MistakeDay? MistakeDay { get; set; }
 }
@@ -37,6 +39,10 @@ public sealed class Settings
     public bool MorningReminder { get; set; } = true;
     public double? PillLeft { get; set; }
     public double? PillTop { get; set; }
+    /// <summary>The version that last ran, to say "updated to …" once after an update.</summary>
+    public string LastVersion { get; set; } = "";
+    /// <summary>Show the how-to guide at the top of "Tạo chủ đề mới".</summary>
+    public bool ShowCreateGuide { get; set; } = true;
     /// <summary>How the word on the taskbar looks.</summary>
     public PillStyle Pill { get; set; } = new();
 }
@@ -140,6 +146,15 @@ public sealed class MistakeEntry
     public Guid WordId { get; set; }
     public int Times { get; set; }
     public DateTime LastWrong { get; set; }
+}
+
+/// <summary>The words answered wrong in one test (or in one day's sessions).</summary>
+public sealed class MistakeList
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Title { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+    public List<Guid> WordIds { get; set; } = [];
 }
 
 /// <summary>A day of studying wrong words, taken on <see cref="Date"/> (or the first day after, if missed).</summary>

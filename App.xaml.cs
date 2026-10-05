@@ -12,6 +12,8 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        // Started by an update: let the previous version exit and release the single-instance lock first.
+        Services.Updater.WaitForPreviousProcess(e.Args);
         _singleInstanceMutex = new System.Threading.Mutex(true, @"Local\Voca2.SingleInstance", out var isFirstInstance);
         _ownsSingleInstanceMutex = isFirstInstance || TryReplaceRunningInstance();
         if (!_ownsSingleInstanceMutex)
@@ -27,6 +29,8 @@ public partial class App : System.Windows.Application
             try { store.Update(d => Services.VocaV1Import.Import(d, includeSettings: true)); }
             catch (Exception) { /* an unreadable old file must not stop the app; the manual button reports details */ }
         }
+        // After an update (or a fresh start): remove the previous exe and leftover downloads.
+        if (Services.Updater.Enabled()) Services.Updater.CleanUp();
         _window = new MainWindow(store);
         _window.Show();
     }

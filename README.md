@@ -15,7 +15,15 @@ phiên bản lấy từ `<Version>` trong `Voca.csproj` — tăng số này trư
 powershell -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-Kiểm tra hành vi (99 kiểm tra cho các quy tắc nghiệp vụ):
+Phát hành bản mới lên GitHub Releases (các máy chạy Voca 2.7.0 trở lên thấy bản này trong *Cài đặt → Cập nhật phiên bản*):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\release.ps1 -Notes "Mô tả thay đổi"
+```
+
+Cần GitHub CLI đã đăng nhập (`winget install --id GitHub.cli` rồi `gh auth login`), code đã commit và push, và `<Version>` mới trong `Voca.csproj`.
+
+Kiểm tra hành vi (127 kiểm tra cho các quy tắc nghiệp vụ):
 
 ```powershell
 dotnet run --project .\tests\Voca.Checks
@@ -29,7 +37,8 @@ dotnet run --project .\tests\Voca.Checks
 - Bấm vào chữ: chi tiết từ, phát âm, đang ở **Tuần · Ngày x/7**, nút **Bắt đầu phiên học**.
 - **Phiên học**: lật thẻ học từ mới (Space, ←/→), rồi trắc nghiệm hai chiều (phím 1–4, Enter). App tự chấm: đúng thì giãn lịch ôn (2, 6, 15… ngày), sai thì ôn lại ngày mai.
 - **Bài kiểm tra** (📝 trên popup, menu khay, Thư viện → *Khóa học* → *Tạo bài kiểm tra*, hoặc *Sửa lộ trình* → *Kiểm tra ngày này*): chọn lộ trình, khoảng ngày, số câu (10/20/30/40/tất cả) và dạng câu — trắc nghiệm từ → nghĩa, nghĩa → từ, gõ từ khi nhìn nghĩa (có gợi ý chữ cái đầu), nghe phát âm rồi chọn từ. Làm như bài thi: chọn đáp án là tự sang câu tiếp, "Câu tiếp" luôn bấm được (bỏ trống được), "Câu trước" để quay lại sửa; chỉ chấm điểm khi bấm **Nộp bài** (câu bỏ trống tính sai). Cuối bài có điểm, thời gian, điểm theo từng dạng và danh sách câu sai; làm lại câu sai. Kết quả không làm thay đổi lịch ôn; từ sai được lưu vào danh sách từ sai.
-- **Ngày học từ sai**: mọi từ trả lời sai (bài kiểm tra và phiên học) được lưu vào danh sách từ sai. Cuối bài kiểm tra, hoặc trên popup khi có từ 5 từ sai trở lên, app đề xuất tạo một ngày học từ sai (tối đa 30 từ, sai nhiều nhất trước) — chọn **Học hôm nay** hoặc **Để ngày mai**. Ngày đó thay cho bài của lộ trình (lật thẻ xem lại rồi trắc nghiệm), lộ trình tạm nghỉ và hôm sau học tiếp; dời sang ngày mai hoặc hủy được trên popup. Từ trả lời đúng trong ngày học từ sai ra khỏi danh sách, từ còn sai ở lại. Từ sai mới trước ngày đó được tự thêm vào.
+- **Danh sách từ sai** (tab *Từ sai* trong Thư viện; mở nhanh bằng dòng 📋 trên popup, menu khay hoặc cuối bài kiểm tra): mỗi bài kiểm tra tạo một danh sách các từ làm sai, từ sai trong phiên học hằng ngày gom theo ngày, kèm mục "Tất cả từ sai". Chọn một danh sách để **Học ngay** (lật thẻ rồi trắc nghiệm, không ảnh hưởng bài học hôm nay), **Để ngày mai** (thành ngày học từ sai) hoặc xóa. Từ trả lời đúng tự ra khỏi mọi danh sách.
+- **Ngày học từ sai**: một danh sách hẹn sang ngày mai sẽ thay cho bài của lộ trình hôm đó (tối đa 30 từ), lộ trình tạm nghỉ và hôm sau học tiếp; trên popup có thể học ngay hôm nay, dời hoặc hủy. Từ sai mới trước ngày đó được tự thêm vào.
 - Học xong mới sang ngày sau; bỏ học vài hôm thì quay lại học đúng ngày dang dở. Hết tuần hiện tổng kết và tự sang tuần kế.
 - Nhắc học bằng thông báo Windows lúc bắt đầu ngày và vào giờ tự chọn buổi tối (nếu chưa học).
 - **📊 Thống kê**: streak, kỷ lục, số từ đã thuộc/đang học/đến hạn, 30 ngày, từ hay quên, nút **Tạo tuần ôn** từ những từ hay quên.
@@ -37,7 +46,8 @@ dotnet run --project .\tests\Voca.Checks
 **Thư viện** (chuột phải chữ trên taskbar, nút ⚙, hoặc nhấp đúp icon khay)
 - **Khóa học**: thứ tự các tuần (đổi thứ tự các tuần đang chờ), bỏ khỏi / thêm vào khóa học.
 - **Sửa lộ trình**: sửa trực tiếp từng ô, thêm/xóa từ, thêm ngày, đặt tiêu đề ngày, **Học từ ngày này**, **Tạo lại ngày này bằng prompt**, **Xuất ra file .md**, xóa lộ trình.
-- **Tạo chủ đề mới**: nhập chủ đề, số ngày, số từ, trình độ → **Sao chép prompt** → dán vào Claude/ChatGPT/Gemini → dán câu trả lời → **Xem trước** (báo lỗi và cảnh báo: thiếu từ, thiếu phiên âm/nghĩa/ví dụ, trùng từ…) → **Nhập vào khóa học**. Cũng mở được file `.md`/`.json` đã xuất.
+- **Tạo chủ đề mới**: nhập chủ đề, số ngày, số từ, trình độ → **Sao chép prompt** → dán vào Claude/ChatGPT/Gemini → dán câu trả lời → **Xem trước** (báo lỗi và cảnh báo: thiếu từ, thiếu phiên âm/nghĩa/ví dụ, trùng từ…) → **Nhập vào khóa học**. Cũng mở được file `.md`/`.json` đã xuất. Đầu tab có hướng dẫn từng bước (đánh dấu bước đang làm, nút mở Claude/ChatGPT/Gemini, mẹo và form mẫu); ẩn được và app nhớ lựa chọn.
+- **Cập nhật phiên bản** (*Cài đặt → Cập nhật phiên bản*, hoặc menu khay → *Cập nhật phiên bản…*): danh sách các bản phát hành trên GitHub (ngày, dung lượng, ghi chú; đánh dấu "Mới nhất" và "Đang dùng"). Chọn một bản → **Cập nhật lên…** (hoặc **Chuyển về…** với bản cũ hơn): app tự tải, chỉ dùng file khi mã SHA-256 và số phiên bản khớp, thay `Voca.exe` (bản cũ giữ tạm thành `Voca.exe.old`) rồi tự mở lại. Dữ liệu trong `%LOCALAPPDATA%\Voca` không bị đụng.
 - **Cài đặt**: hiển thị, thời gian đổi từ, số từ ôn tối đa mỗi ngày, nhắc học, chạy cùng Windows, **kiểu chữ trên taskbar** (phông, cỡ, đậm/nghiêng, màu chữ và màu đáp án, đổ bóng, nền sau chữ và độ đậm nền, độ rộng tối đa — có xem trước trực tiếp và nút về mặc định), mở thư mục dữ liệu, sao lưu.
 
 ## Chuyển sang máy khác

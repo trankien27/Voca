@@ -1,0 +1,81 @@
+<UserControl x:Class="Voca.MistakesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Loaded="View_Loaded" Unloaded="View_Unloaded">
+    <UserControl.Resources>
+        <Style x:Key="Panel" TargetType="Border">
+            <Setter Property="Background" Value="White"/><Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="BorderBrush" Value="#E6E3F5"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Padding" Value="12"/>
+        </Style>
+    </UserControl.Resources>
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+            <TextBlock Text="Danh sách từ sai" FontSize="19" FontWeight="Bold" Foreground="{StaticResource Ink}"/>
+            <TextBlock Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0"
+                       Text="Mỗi bài kiểm tra tạo một danh sách các từ bạn làm sai; từ sai trong phiên học hằng ngày được gom theo ngày. Chọn một danh sách để học lại — từ trả lời đúng sẽ tự ra khỏi danh sách."/>
+            <Border x:Name="DayBanner" Background="#FFF6ED" CornerRadius="10" Padding="12,8" Margin="0,10,0,0" Visibility="Collapsed">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Hủy hẹn" Click="CancelDay_Click" Background="Transparent" Foreground="#93370D" Padding="9,4"/>
+                    <TextBlock x:Name="DayBannerText" Foreground="#93370D" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                </DockPanel>
+            </Border>
+        </StackPanel>
+        <TextBlock DockPanel.Dock="Bottom" x:Name="StatusText" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="4,10,0,0"/>
+
+        <Grid>
+            <TextBlock x:Name="EmptyText" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"
+                       Foreground="{StaticResource Muted}" FontSize="14" TextWrapping="Wrap" MaxWidth="420"
+                       Text="Chưa có từ sai nào 🎉&#x0a;Làm một bài kiểm tra (📝 trên popup hoặc Thư viện) — các từ trả lời sai sẽ xuất hiện ở đây để bạn học lại."/>
+            <Grid x:Name="ContentGrid">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="300"/><ColumnDefinition Width="14"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                <Border Style="{StaticResource Panel}" Padding="6">
+                    <ListBox x:Name="ListsBox" BorderThickness="0" HorizontalContentAlignment="Stretch"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="ListsBox_SelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="4,5">
+                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="{StaticResource Ink}" TextWrapping="Wrap"/>
+                                    <TextBlock Text="{Binding Meta}" FontSize="12" Foreground="{StaticResource Muted}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+                <Border Grid.Column="2" Style="{StaticResource Panel}">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top" Margin="2,0,0,8">
+                            <TextBlock x:Name="SelectedTitle" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="SelectedMeta" FontSize="12" Foreground="{StaticResource Muted}"/>
+                        </StackPanel>
+                        <WrapPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                            <Button x:Name="PracticeButton" Content="▶ Học ngay" Click="Practice_Click" Background="{StaticResource Accent}" Foreground="White"
+                                    FontWeight="SemiBold" Padding="18,8" ToolTip="Lật thẻ xem lại rồi trắc nghiệm. Không ảnh hưởng bài học hôm nay của lộ trình."/>
+                            <Button x:Name="TomorrowButton" Content="Để ngày mai" Click="Tomorrow_Click"
+                                    ToolTip="Ngày mai thành ngày học từ sai: thay cho bài của lộ trình, hôm sau học tiếp"/>
+                            <Button x:Name="DeleteButton" Content="Xóa danh sách" Click="Delete_Click" Background="#FEE4E2" Foreground="#B42318"/>
+                        </WrapPanel>
+                        <ListBox x:Name="WordsList" BorderThickness="0" HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel Margin="2,4">
+                                        <Border DockPanel.Dock="Right" CornerRadius="8" Padding="7,1" Background="#FDECEA" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Times}" FontSize="11" FontWeight="SemiBold" Foreground="#B42318"/>
+                                        </Border>
+                                        <StackPanel>
+                                            <TextBlock>
+                                                <Run Text="{Binding Text, Mode=OneWay}" FontWeight="SemiBold" Foreground="#172033"/>
+                                                <Run Text="{Binding Phonetic, Mode=OneWay}" Foreground="#6C5CE7"/>
+                                                <Run Text="{Binding Pos, Mode=OneWay}" FontStyle="Italic" Foreground="#667085"/>
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding Meaning}" Foreground="#667085" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</UserControl>

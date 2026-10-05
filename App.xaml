@@ -6,13 +6,44 @@
         <SolidColorBrush x:Key="Ink" Color="#172033" />
         <SolidColorBrush x:Key="Muted" Color="#667085" />
         <SolidColorBrush x:Key="Accent" Color="#6C5CE7" />
+        <!-- Flat buttons: the Windows default template paints focused/hovered buttons pale blue,
+             which made coloured buttons (e.g. "Câu tiếp" after a click) look disabled. -->
         <Style TargetType="Button">
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Padding" Value="12,7" />
             <Setter Property="Margin" Value="3" />
             <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="Background" Value="#F0EEFF" />
             <Setter Property="Foreground" Value="#4B3CC4" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border x:Name="Face" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" SnapsToDevicePixels="True">
+                                <ContentPresenter Margin="{TemplateBinding Padding}" RecognizesAccessKey="True"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                            </Border>
+                            <Border x:Name="Shade" Background="#000000" CornerRadius="6" Opacity="0" IsHitTestVisible="False"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Shade" Property="Opacity" Value="0.06" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Shade" Property="Opacity" Value="0.14" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Application.Resources>
 </Application>

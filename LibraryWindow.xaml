@@ -21,6 +21,31 @@
             <Setter Property="Background" Value="White"/><Setter Property="CornerRadius" Value="12"/>
             <Setter Property="BorderBrush" Value="#E6E3F5"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Padding" Value="14"/>
         </Style>
+        <Style x:Key="GuideCard" TargetType="Border">
+            <Setter Property="Background" Value="White"/><Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="BorderBrush" Value="#E6E3F5"/><Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="12,10"/><Setter Property="Margin" Value="0,0,8,0"/>
+        </Style>
+        <Style x:Key="GuideNumber" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/><Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+        </Style>
+        <Style x:Key="GuideTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14"/><Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="Margin" Value="0,2,0,4"/>
+        </Style>
+        <Style x:Key="GuideState" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/><Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,6,0,0"/><Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style x:Key="GuideQ" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Foreground" Value="{StaticResource Ink}"/>
+            <Setter Property="Margin" Value="0,6,0,1"/><Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style x:Key="GuideA" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource Muted}"/><Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
         <DataTemplate x:Key="PlanItem">
             <DockPanel Margin="2,4">
                 <Border DockPanel.Dock="Right" CornerRadius="9" Padding="8,2" Background="{Binding ChipBrush}" VerticalAlignment="Center">
@@ -162,6 +187,88 @@
             <TabItem Header="  Tạo chủ đề mới  " x:Name="CreateTab">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
+                        <!-- Guide: what to do, where the learner is now, tips. Can be hidden (remembered). -->
+                        <Border x:Name="GuidePanel" Style="{StaticResource Panel}" Margin="0,0,0,10" Background="#FBFAFF" BorderBrush="#DCD6FF">
+                            <StackPanel>
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="Ẩn hướng dẫn" Click="HideGuide_Click" Padding="9,4" VerticalAlignment="Top"/>
+                                    <TextBlock Style="{StaticResource H}" Text="Cách tạo một chủ đề mới" Margin="0,2,0,4"/>
+                                </DockPanel>
+                                <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,12"
+                                           Text="Không cần tài khoản hay API key: app soạn sẵn câu lệnh (prompt), bạn nhờ một AI miễn phí viết danh sách từ theo form mẫu, rồi dán câu trả lời vào đây. Chỉ mất vài phút."/>
+                                <UniformGrid Columns="4">
+                                    <Border x:Name="GuideCard1" Style="{StaticResource GuideCard}">
+                                        <StackPanel>
+                                            <TextBlock Style="{StaticResource GuideNumber}" Text="1"/>
+                                            <TextBlock Style="{StaticResource GuideTitle}" Text="Điền thông tin"/>
+                                            <TextBlock Style="{StaticResource Hint}" FontSize="12"
+                                                       Text="Ở ô 1: chủ đề (bắt buộc), số ngày, số từ mỗi ngày, trình độ. Prompt ở ô 2 tự cập nhật theo."/>
+                                            <TextBlock x:Name="GuideState1" Style="{StaticResource GuideState}"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border x:Name="GuideCard2" Style="{StaticResource GuideCard}">
+                                        <StackPanel>
+                                            <TextBlock Style="{StaticResource GuideNumber}" Text="2"/>
+                                            <TextBlock Style="{StaticResource GuideTitle}" Text="Sao chép prompt"/>
+                                            <TextBlock Style="{StaticResource Hint}" FontSize="12"
+                                                       Text="Ở ô 2 bấm “Sao chép prompt”. Không cần sửa gì trong prompt."/>
+                                            <TextBlock x:Name="GuideState2" Style="{StaticResource GuideState}"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border x:Name="GuideCard3" Style="{StaticResource GuideCard}">
+                                        <StackPanel>
+                                            <TextBlock Style="{StaticResource GuideNumber}" Text="AI"/>
+                                            <TextBlock Style="{StaticResource GuideTitle}" Text="Hỏi AI"/>
+                                            <TextBlock Style="{StaticResource Hint}" FontSize="12"
+                                                       Text="Mở một AI, dán prompt (Ctrl+V) và gửi. AI dừng giữa chừng thì nhắn “tiếp tục”."/>
+                                            <WrapPanel Margin="-3,4,0,0">
+                                                <Button Content="Claude" Tag="https://claude.ai/new" Click="OpenAi_Click" Padding="8,3" FontSize="12"/>
+                                                <Button Content="ChatGPT" Tag="https://chatgpt.com/" Click="OpenAi_Click" Padding="8,3" FontSize="12"/>
+                                                <Button Content="Gemini" Tag="https://gemini.google.com/app" Click="OpenAi_Click" Padding="8,3" FontSize="12"/>
+                                            </WrapPanel>
+                                            <TextBlock x:Name="GuideState3" Style="{StaticResource GuideState}"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border x:Name="GuideCard4" Style="{StaticResource GuideCard}">
+                                        <StackPanel>
+                                            <TextBlock Style="{StaticResource GuideNumber}" Text="3"/>
+                                            <TextBlock Style="{StaticResource GuideTitle}" Text="Dán và nhập"/>
+                                            <TextBlock Style="{StaticResource Hint}" FontSize="12"
+                                                       Text="Copy toàn bộ câu trả lời của AI, dán vào ô 3, bấm “Xem trước” rồi “Nhập vào khóa học”."/>
+                                            <TextBlock x:Name="GuideState4" Style="{StaticResource GuideState}"/>
+                                        </StackPanel>
+                                    </Border>
+                                </UniformGrid>
+
+                                <Expander Header="Mẹo và câu hỏi thường gặp" Margin="0,12,0,0" Foreground="{StaticResource Ink}">
+                                    <StackPanel Margin="20,6,0,0">
+                                        <TextBlock Style="{StaticResource GuideQ}" Text="AI trả lời bị cắt hoặc dừng giữa chừng?"/>
+                                        <TextBlock Style="{StaticResource GuideA}" Text="Nhắn “tiếp tục” cho AI. Dán nối tất cả các phần vào ô 3 — lời chào, dấu ``` hay dòng trống thừa đều không sao, app tự bỏ qua."/>
+                                        <TextBlock Style="{StaticResource GuideQ}" Text="Xem trước báo lỗi màu đỏ?"/>
+                                        <TextBlock Style="{StaticResource GuideA}" Text="Sửa thẳng trong ô 3 (vd. thêm nghĩa còn thiếu, xóa từ trùng) rồi bấm “Xem trước” lại. Cảnh báo màu vàng (vd. một ngày thiếu vài từ) vẫn nhập được."/>
+                                        <TextBlock Style="{StaticResource GuideQ}" Text="Nhập xong thì học thế nào?"/>
+                                        <TextBlock Style="{StaticResource GuideA}" Text="Lộ trình được thêm vào cuối khóa học và tự đến lượt khi học xong các lộ trình trước. Muốn học ngay: tab Khóa học → “↑ Lên”, hoặc tab Sửa lộ trình → “▶ Học từ ngày này”."/>
+                                        <TextBlock Style="{StaticResource GuideQ}" Text="Muốn sửa từ hay đổi cả một ngày?"/>
+                                        <TextBlock Style="{StaticResource GuideA}" Text="Tab Sửa lộ trình: sửa trực tiếp trong bảng, thêm/xóa từ, hoặc “Tạo lại ngày này bằng prompt” để AI viết lại riêng ngày đó."/>
+                                        <TextBlock Style="{StaticResource GuideQ}" Text="Đã có sẵn danh sách từ, không muốn dùng AI?"/>
+                                        <TextBlock Style="{StaticResource GuideA}" Text="Tự soạn theo form mẫu bên dưới (hoặc “Lưu form mẫu…” ở ô 2 để có file), rồi dán vào ô 3 hoặc bấm “Mở file .md…”."/>
+                                        <TextBlock Style="{StaticResource GuideQ}" Text="Chép lộ trình từ máy khác?"/>
+                                        <TextBlock Style="{StaticResource GuideA}" Text="Dán văn bản đã sao chép (có thể gồm nhiều lộ trình) vào ô 3 rồi Xem trước → Nhập. Lộ trình đã có trong thư viện sẽ được bỏ qua, không bị trùng."/>
+                                    </StackPanel>
+                                </Expander>
+                                <Expander Header="Xem form mẫu (để tự soạn hoặc đối chiếu câu trả lời của AI)" Margin="0,6,0,0" Foreground="{StaticResource Ink}">
+                                    <StackPanel Margin="20,6,0,0">
+                                        <TextBlock Style="{StaticResource GuideA}"
+                                                   Text="Mỗi ngày bắt đầu bằng “## Ngày N — tiêu đề”, sau đó là bảng 6 cột. Phiên âm đặt trong /…/, không dùng ký tự | trong ô. STT đánh liên tục qua các ngày."/>
+                                        <TextBox x:Name="GuideExampleBox" IsReadOnly="True" FontFamily="Consolas" FontSize="12" Padding="6"
+                                                 Background="White" TextWrapping="NoWrap" HorizontalScrollBarVisibility="Auto"/>
+                                    </StackPanel>
+                                </Expander>
+                            </StackPanel>
+                        </Border>
+                        <Button x:Name="ShowGuideButton" Content="❔ Xem hướng dẫn tạo chủ đề" Click="ShowGuide_Click" HorizontalAlignment="Left"
+                                Margin="0,0,0,8" Visibility="Collapsed"/>
+
                         <Border Style="{StaticResource Panel}" Margin="0,0,0,10">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource H}" Text="1 · Thông tin"/>
@@ -247,6 +354,9 @@
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
+
+            <!-- ================= Mistakes ================= -->
+            <TabItem Header="  Từ sai  " x:Name="MistakesTab"/>
 
             <!-- ================= Settings ================= -->
             <TabItem Header="  Cài đặt  " x:Name="SettingsTab">
@@ -384,6 +494,43 @@
                                         <Button Content="Về mặc định" Click="ResetPillStyle_Click"/>
                                     </WrapPanel>
                                 </Grid>
+                            </StackPanel>
+                        </Border>
+                        <Border x:Name="UpdatesPanel" Style="{StaticResource Panel}" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource H}" Text="Cập nhật phiên bản"/>
+                                <TextBlock x:Name="VersionText" Foreground="{StaticResource Ink}" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,8"
+                                           Text="Chọn một phiên bản rồi bấm cập nhật: app tự tải, kiểm tra, cài đè và mở lại sau vài giây. Chọn bản cũ hơn để quay về. Lộ trình, tiến độ và cài đặt giữ nguyên."/>
+                                <ListBox x:Name="VersionsList" Height="200" HorizontalContentAlignment="Stretch" BorderBrush="#E6E3F5"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="VersionsList_SelectionChanged">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <DockPanel Margin="4,5">
+                                                <Border DockPanel.Dock="Right" CornerRadius="9" Padding="8,2" VerticalAlignment="Top"
+                                                        Background="{Binding BadgeBrush}" Visibility="{Binding BadgeVisibility}">
+                                                    <TextBlock Text="{Binding Badge}" FontSize="11" FontWeight="SemiBold" Foreground="{Binding BadgeInk}"/>
+                                                </Border>
+                                                <StackPanel>
+                                                    <TextBlock>
+                                                        <Run Text="{Binding Name, Mode=OneWay}" FontWeight="SemiBold" Foreground="#172033"/>
+                                                        <Run Text="{Binding Meta, Mode=OneWay}" FontSize="12" Foreground="#667085"/>
+                                                    </TextBlock>
+                                                    <TextBlock Text="{Binding Notes}" FontSize="12" Foreground="#667085" TextWrapping="Wrap" MaxHeight="34"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <WrapPanel Margin="-3,8,0,0">
+                                    <Button x:Name="InstallVersionButton" Content="Chọn một phiên bản" IsEnabled="False" Click="InstallVersion_Click"
+                                            Style="{StaticResource Primary}" FontWeight="SemiBold"/>
+                                    <Button x:Name="RefreshVersionsButton" Content="Làm mới danh sách" Click="RefreshVersions_Click"/>
+                                    <Button Content="Trang phát hành" Click="ReleasesPage_Click"/>
+                                </WrapPanel>
+                                <ProgressBar x:Name="UpdateProgress" Height="6" Margin="0,8,0,0" Maximum="1" Visibility="Collapsed"/>
+                                <TextBlock x:Name="UpdateStatusText" Style="{StaticResource Hint}" Margin="2,6,0,0"/>
                             </StackPanel>
                         </Border>
                         <Border Style="{StaticResource Panel}">

@@ -90,7 +90,8 @@
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <Button x:Name="BackButton" Content="Trước" Click="Back_Click"/>
-                    <Button x:Name="NextButton" Content="Tiếp" Click="Next_Click" Background="{StaticResource Accent}" Foreground="White"/>
+                    <Button x:Name="NextButton" Content="Tiếp" Click="Next_Click" Background="{StaticResource Accent}" Foreground="White"
+                            FontWeight="SemiBold" Padding="20,8" MinWidth="110"/>
                 </StackPanel>
                 <TextBlock x:Name="FooterText" VerticalAlignment="Center" Foreground="{StaticResource Muted}"/>
             </DockPanel>

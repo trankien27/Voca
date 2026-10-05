@@ -32,18 +32,18 @@ public partial class SessionWindow : Window
     private Stage _stage;
     private int _index;
     private bool _flipped;
-    private readonly bool _mistakeDay;
+    private readonly SessionMode _mode;
     private string? _picked;
 
     private sealed record ResultRow(string Mark, Brush MarkBrush, string Word, string Meaning, string Next);
 
     public SessionWindow(AppData data, IReadOnlyList<Word> newWords, IReadOnlyList<Word> reviews, string courseText,
         Action<IReadOnlyList<(Word Word, bool Correct)>, IReadOnlyCollection<Word>> onFinished, Action<string> speak,
-        bool mistakeDay = false)
+        SessionMode mode = SessionMode.Course)
     {
         InitializeComponent();
-        _mistakeDay = mistakeDay;
-        if (mistakeDay) StageLearnText.Text = "Xem lại từ sai";
+        _mode = mode;
+        if (mode != SessionMode.Course) StageLearnText.Text = "Xem lại từ sai";
         _newWords = newWords.ToList();
         _learn = newWords.ToList();
         _quiz = CourseEngine.BuildQuiz(data, [.. newWords, .. reviews], Random.Shared);
@@ -120,7 +120,7 @@ public partial class SessionWindow : Window
         BackButton.IsEnabled = _index > 0;
         NextButton.IsEnabled = true;
         NextButton.Content = _index == _learn.Count - 1 ? "Bắt đầu kiểm tra" : "Tiếp";
-        FooterText.Text = $"{(_mistakeDay ? "Từ sai" : "Từ mới")} {_index + 1} / {_learn.Count}";
+        FooterText.Text = $"{(_mode == SessionMode.Course ? "Từ mới" : "Từ sai")} {_index + 1} / {_learn.Count}";
     }
 
     private void RenderQuestion()
@@ -178,13 +178,18 @@ public partial class SessionWindow : Window
         var correct = _answers.Count(a => a.Correct);
         ResultScore.Text = $"{correct}/{_answers.Count}";
         var today = DateTime.Today;
-        ResultNote.Text = _mistakeDay
-            ? correct == _answers.Count
+        ResultNote.Text = _mode switch
+        {
+            SessionMode.MistakeDay => correct == _answers.Count
                 ? "Đúng hết! Các từ này đã ra khỏi danh sách từ sai. Mai học tiếp lộ trình."
-                : "Từ trả lời đúng đã ra khỏi danh sách từ sai; từ còn sai ở lại danh sách và quay lại vào ngày mai."
-            : correct == _answers.Count
+                : "Từ trả lời đúng đã ra khỏi danh sách từ sai; từ còn sai ở lại danh sách và quay lại vào ngày mai.",
+            SessionMode.Practice => correct == _answers.Count
+                ? "Đúng hết! Các từ này đã ra khỏi danh sách từ sai."
+                : "Từ trả lời đúng đã ra khỏi danh sách từ sai; từ còn sai vẫn ở lại để học lại sau.",
+            _ => correct == _answers.Count
                 ? "Tuyệt vời, đúng hết! Lịch ôn tập đã được giãn ra."
-                : "Từ làm sai sẽ quay lại vào ngày mai và xuất hiện trước trên taskbar hôm nay.";
+                : "Từ làm sai sẽ quay lại vào ngày mai và xuất hiện trước trên taskbar hôm nay."
+        };
         ResultList.ItemsSource = _answers.Select(a =>
         {
             var due = a.Word.Review?.Due.Date ?? today.AddDays(1);

@@ -23,9 +23,9 @@ public partial class LibraryWindow : Window
 
     private readonly Store _store;
     private readonly Action _openStats;
-    private readonly Action<string> _speak;
-    private readonly bool _canListen;
+    private readonly AppActions _actions;
     private bool _nameEdited;
+    private bool _promptCopied;
     private bool _loading = true;
 
     private sealed record PlanRow(Guid Id, string Order, string Name, string Meta, string Chip, Brush ChipBrush, Brush ChipInk);
@@ -36,13 +36,18 @@ public partial class LibraryWindow : Window
     private Plan? EditedPlan => PlanBox.SelectedItem as Plan;
     private int? SelectedDay => (DaysList.SelectedItem as DayRow)?.Day;
 
-    public LibraryWindow(Store store, Action openStats, Action<string> speak, bool canListen)
+    public LibraryWindow(Store store, AppActions actions)
     {
         InitializeComponent();
         _store = store;
-        _openStats = openStats;
-        _speak = speak;
-        _canListen = canListen;
+        _actions = actions;
+        _openStats = actions.OpenStats;
+        MistakesTab.Content = new MistakesView(store, actions);
+        // The version list is fetched the first time Settings is opened.
+        Tabs.SelectionChanged += (_, e) =>
+        {
+            if (e.Source == Tabs && Tabs.SelectedItem == SettingsTab && !_versionsLoaded) _ = LoadVersionsAsync();
+        };
         _store.Changed += OnStoreChanged;
         Closed += (_, _) => _store.Changed -= OnStoreChanged;
 
@@ -50,7 +55,20 @@ public partial class LibraryWindow : Window
         RefreshPlanBox(select: CourseEngine.Current(Data)?.Plan);
         LoadSettings();
         RefreshPrompt();
+        GuideExampleBox.Text = PlanFormat.Example;
+        ShowGuide(Data.Settings.ShowCreateGuide);
         _loading = false;
+        UpdateGuide();
+    }
+
+    /// <summary>Brings the "Từ sai" tab to the front.</summary>
+    public void ShowMistakes() => Tabs.SelectedItem = MistakesTab;
+
+    /// <summary>Brings Settings → "Cập nhật phiên bản" to the front.</summary>
+    public void ShowUpdates()
+    {
+        Tabs.SelectedItem = SettingsTab;
+        Dispatcher.BeginInvoke(() => UpdatesPanel.BringIntoView(), System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     private void OnStoreChanged() => Dispatcher.Invoke(() =>
@@ -116,7 +134,7 @@ public partial class LibraryWindow : Window
     }
 
     private void OpenTest(Guid? planId, int? fromDay = null, int? toDay = null) =>
-        new TestWindow(_store, planId, fromDay, toDay, _canListen, _speak) { Owner = this }.Show();
+        new TestWindow(_store, planId, fromDay, toDay, _actions) { Owner = this }.Show();
 
     private void CourseTest_Click(object sender, RoutedEventArgs e) =>
         OpenTest((CourseList.SelectedItem as PlanRow)?.Id ?? (OutsideList.SelectedItem as PlanRow)?.Id);
@@ -345,7 +363,9 @@ public partial class LibraryWindow : Window
     private void CreateInput_Changed(object sender, RoutedEventArgs e)
     {
         if (sender == NameBox && !_loading) _nameEdited = NameBox.Text.Trim().Length > 0;
+        _promptCopied = false;
         RefreshPrompt();
+        UpdateGuide();
     }
 
     private void RefreshPrompt()
@@ -360,6 +380,66 @@ public partial class LibraryWindow : Window
     {
         if (!TryCopy(PromptBox.Text)) { PromptBox.Focus(); PromptBox.SelectAll(); }
         Status(TryCopyStatus);
+        _promptCopied = true;
+        UpdateGuide();
+    }
+
+    // ---- guide ----
+
+    private static readonly Brush GuideNow = Frozen(0x6C, 0x5C, 0xE7), GuideLine = Frozen(0xE6, 0xE3, 0xF5);
+
+    private void ShowGuide(bool show)
+    {
+        GuidePanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        ShowGuideButton.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void HideGuide_Click(object sender, RoutedEventArgs e)
+    {
+        ShowGuide(false);
+        _store.Update(d => d.Settings.ShowCreateGuide = false);
+    }
+
+    private void ShowGuide_Click(object sender, RoutedEventArgs e)
+    {
+        ShowGuide(true);
+        _store.Update(d => d.Settings.ShowCreateGuide = true);
+    }
+
+    private void OpenAi_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not string url) return;
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+        catch (Exception ex) { Status($"Không mở được trình duyệt: {ex.Message}"); }
+    }
+
+    /// <summary>Marks finished steps with ✓ and highlights the step to do now.</summary>
+    private void UpdateGuide()
+    {
+        if (_loading || GuideState1 is null) return;
+        var hasTopic = TopicBox.Text.Trim().Length > 0;
+        var pasted = ResultBox.Text.Trim().Length > 0;
+        var ready = ImportButton.IsEnabled;
+        // Pasting (an AI answer or plans copied from another computer) covers the earlier steps.
+        var done = new[] { hasTopic || pasted, (hasTopic && _promptCopied) || pasted, pasted, false };
+        var now = Array.IndexOf(done, false);
+        var hints = new[]
+        {
+            "● Bắt đầu ở đây: nhập chủ đề ở ô 1",
+            "● Bấm “Sao chép prompt” ở ô 2",
+            "● Dán prompt vào AI, chờ AI trả lời xong",
+            ready ? "● Bấm “Nhập vào khóa học”" : pasted ? "● Bấm “Xem trước” để kiểm tra" : "● Dán câu trả lời vào ô 3"
+        };
+        var cards = new[] { GuideCard1, GuideCard2, GuideCard3, GuideCard4 };
+        var states = new[] { GuideState1, GuideState2, GuideState3, GuideState4 };
+        for (var i = 0; i < cards.Length; i++)
+        {
+            var isNow = i == now;
+            cards[i].BorderBrush = isNow ? GuideNow : GuideLine;
+            cards[i].BorderThickness = new Thickness(isNow ? 2 : 1);
+            states[i].Text = done[i] ? "✓ Xong" : isNow ? hints[i] : "";
+            states[i].Foreground = done[i] ? DoneInk : GuideNow;
+        }
     }
 
     private void SaveTemplate_Click(object sender, RoutedEventArgs e)
@@ -381,6 +461,7 @@ public partial class LibraryWindow : Window
     private void ResultBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         if (ImportButton is not null) ImportButton.IsEnabled = false;
+        UpdateGuide();
     }
 
     /// <summary>Count checks only apply when the pasted text answers the prompt on this page.</summary>
@@ -436,6 +517,7 @@ public partial class LibraryWindow : Window
             })).ToList();
         var canImport = results.All(r => r.CanImport) && (!many || plans.Any(p => !AlreadyInLibrary(p)));
         ImportButton.IsEnabled = canImport;
+        UpdateGuide();
         Status(canImport
             ? warnings.Count > 0 ? "Có cảnh báo nhưng vẫn nhập được. Sửa trong ô trên rồi xem trước lại nếu muốn." : "Mọi thứ ổn. Bấm “Nhập vào khóa học”."
             : errors.Count > 0 ? "Còn lỗi, sửa rồi bấm “Xem trước” lại." : "Không có lộ trình mới để nhập.");
@@ -523,6 +605,7 @@ public partial class LibraryWindow : Window
         ReminderHourBox.SelectedItem = s.ReminderHour is >= 16 and <= 23 ? $"{s.ReminderHour}:00" : "Tắt";
         StartWithWindowsBox.IsChecked = WindowsStartupService.IsEnabled();
         LoadPillStyle(s.Pill);
+        VersionText.Text = $"Đang dùng: Voca {Updater.Current.ToString(3)}";
         DataPathText.Text =$"Toàn bộ dữ liệu (lộ trình, tiến độ, cài đặt) nằm trong {Path.Combine(_store.Folder, "voca.json")}. Mỗi lần lưu giữ một bản .bak.";
     }
 
@@ -668,6 +751,124 @@ public partial class LibraryWindow : Window
     {
         LoadPillStyle(new PillStyle());
         Status("Đã đặt lại kiểu chữ mặc định trong phần xem trước. Bấm “Lưu kiểu chữ” để áp dụng.");
+    }
+
+    // ---- versions ----
+
+    private sealed record VersionRow(UpdateInfo Info, string Name, string Meta, string Notes,
+        string Badge, Brush BadgeBrush, Brush BadgeInk, Visibility BadgeVisibility);
+
+    private bool _versionsLoaded;
+    private bool _installing;
+
+    private async Task LoadVersionsAsync()
+    {
+        RefreshVersionsButton.IsEnabled = false;
+        UpdateStatusText.Text = "Đang tải danh sách phiên bản…";
+        try
+        {
+            var releases = await Updater.ListAsync(Updater.Http);
+            _versionsLoaded = true;
+            var current = Updater.Current;
+            var latest = releases.FirstOrDefault()?.Version;
+            var rows = releases.Select(r => VersionRowFor(r, current, latest)).ToList();
+            VersionsList.ItemsSource = rows;
+            if (latest is not null && Updater.IsNewer(latest, current)) VersionsList.SelectedItem = rows[0];
+            UpdateStatusText.Text = releases.Count == 0 ? "Chưa có bản phát hành nào trên GitHub."
+                : latest is not null && Updater.IsNewer(latest, current) ? $"Có bản mới: Voca {latest.ToString(3)}."
+                : "Bạn đang dùng bản mới nhất.";
+            if (!Updater.Enabled())
+                UpdateStatusText.Text += " (Bản này chạy từ thư mục build nên không cài được phiên bản khác — hãy dùng bản trong dist hoặc tải từ GitHub.)";
+        }
+        catch (Exception ex)
+        {
+            UpdateStatusText.Text = $"Không tải được danh sách phiên bản: {ex.Message}";
+        }
+        finally
+        {
+            RefreshVersionsButton.IsEnabled = true;
+            UpdateInstallButton();
+        }
+    }
+
+    private static VersionRow VersionRowFor(UpdateInfo release, Version current, Version? latest)
+    {
+        var isCurrent = release.Version == current;
+        var isLatest = release.Version == latest;
+        var badge = isCurrent && isLatest ? "Mới nhất · đang dùng" : isCurrent ? "Đang dùng" : isLatest ? "Mới nhất" : "";
+        var meta = string.Join(" · ", new[]
+        {
+            release.PublishedAt?.ToString("dd/MM/yyyy") ?? "",
+            release.Size > 0 ? $"{release.Size / 1048576.0:0.0} MB" : ""
+        }.Where(t => t.Length > 0));
+        var notes = string.Join("  ", release.Notes.Split('\n').Select(l => l.Trim().TrimStart('-', '*', '#', ' ')).Where(l => l.Length > 0));
+        return new VersionRow(release, $"Voca {release.Version.ToString(3)}", meta.Length > 0 ? "   " + meta : "",
+            notes, badge, isCurrent ? WaitWash : DoneWash, isCurrent ? WaitInk : DoneInk,
+            badge.Length > 0 ? Visibility.Visible : Visibility.Collapsed);
+    }
+
+    private void VersionsList_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateInstallButton();
+
+    private void UpdateInstallButton()
+    {
+        var current = Updater.Current;
+        var version = (VersionsList.SelectedItem as VersionRow)?.Info.Version;
+        InstallVersionButton.Content = version is null ? "Chọn một phiên bản"
+            : version == current ? "Đang dùng bản này"
+            : Updater.IsNewer(version, current) ? $"⬆ Cập nhật lên {version.ToString(3)}"
+            : $"⬇ Chuyển về {version.ToString(3)}";
+        InstallVersionButton.IsEnabled = !_installing && version is not null && version != current && Updater.Enabled();
+        RefreshVersionsButton.IsEnabled = !_installing;
+    }
+
+    private void RefreshVersions_Click(object sender, RoutedEventArgs e) => _ = LoadVersionsAsync();
+
+    /// <summary>Asks, downloads and verifies the chosen version, installs it over this exe and restarts.</summary>
+    private async void InstallVersion_Click(object sender, RoutedEventArgs e)
+    {
+        if (VersionsList.SelectedItem is not VersionRow row || _installing) return;
+        var info = row.Info;
+        var target = info.Version.ToString(3);
+        var newer = Updater.IsNewer(info.Version, Updater.Current);
+        var busy = System.Windows.Application.Current.Windows.OfType<Window>().Any(w => w is SessionWindow or TestWindow);
+        var message = (newer ? $"Cập nhật lên Voca {target}?" : $"Chuyển về Voca {target} (bản cũ hơn)?") +
+                      "\n\nApp sẽ tải, cài đè rồi tự mở lại sau vài giây. Lộ trình, tiến độ và cài đặt giữ nguyên." +
+                      (newer ? "" : "\n\nBản cũ hơn không có các tính năng ra sau nó; dữ liệu riêng của các tính năng đó có thể mất khi bản cũ lưu lại.") +
+                      (busy ? "\n\nĐang có phiên học hoặc bài kiểm tra mở — phần chưa xong sẽ mất." : "");
+        if (System.Windows.MessageBox.Show(this, message, "Cập nhật Voca", MessageBoxButton.YesNo, MessageBoxImage.Question,
+                newer ? MessageBoxResult.Yes : MessageBoxResult.No) != MessageBoxResult.Yes)
+            return;
+
+        _installing = true;
+        UpdateInstallButton();
+        UpdateProgress.Value = 0;
+        UpdateProgress.Visibility = Visibility.Visible;
+        UpdateStatusText.Text = $"Đang tải Voca {target}…";
+        try
+        {
+            var progress = new Progress<double>(value =>
+            {
+                UpdateProgress.Value = value;
+                UpdateStatusText.Text = $"Đang tải Voca {target}… {value:P0}";
+            });
+            var downloaded = await Updater.DownloadAsync(Updater.Http, info, progress);
+            UpdateStatusText.Text = "Đang cài đặt, app sẽ tự mở lại…";
+            Updater.InstallAndRestart(downloaded);
+            System.Windows.Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            UpdateStatusText.Text = $"Không cập nhật được: {ex.Message}";
+            _installing = false;
+            UpdateProgress.Visibility = Visibility.Collapsed;
+            UpdateInstallButton();
+        }
+    }
+
+    private void ReleasesPage_Click(object sender, RoutedEventArgs e)
+    {
+        try { Process.Start(new ProcessStartInfo(Updater.ReleasesPage) { UseShellExecute = true }); }
+        catch (Exception ex) { Status($"Không mở được trình duyệt: {ex.Message}"); }
     }
 
     private void OpenDataFolder_Click(object sender, RoutedEventArgs e) =>
