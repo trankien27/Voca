@@ -1,0 +1,92 @@
+# Voca 2
+
+Ứng dụng Windows học từ vựng tiếng Anh mỗi ngày, **chạy độc lập hoàn toàn**: không cần server, không cần tài khoản, dùng được khi mất mạng. Từ vựng nằm ngay trên taskbar, mỗi ngày một phiên học ngắn có kiểm tra, ôn tập ngắt quãng tự động, và tạo chủ đề mới bằng bất kỳ AI chat nào (không cần API key).
+
+## Chạy
+
+```powershell
+dotnet run --project .\Voca.csproj
+```
+
+Bản phát hành (một file exe, cần .NET 8 Desktop Runtime). Script chạy kiểm tra rồi build vào `dist\v<phiên bản>\`,
+phiên bản lấy từ `<Version>` trong `Voca.csproj` — tăng số này trước khi build bản mới để giữ các bản cũ:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build.ps1
+```
+
+Kiểm tra hành vi (99 kiểm tra cho các quy tắc nghiệp vụ):
+
+```powershell
+dotnet run --project .\tests\Voca.Checks
+```
+
+## Tính năng
+
+**Học mỗi ngày**
+- Lần mở đầu có sẵn khóa học 7 tuần (Education, Work & Money, Health, Technology, Environment, Society & Government, IELTS), mỗi tuần 7 ngày × 20 từ, đủ phiên âm, nghĩa và ví dụ.
+- Chữ trên taskbar xoay các từ của hôm nay (từ trả lời sai lên trước). Chế độ *chỉ từ*, *flashcard từ → nghĩa*, *nghĩa → từ*. Tự ẩn khi xem video hay trình chiếu toàn màn hình. Kéo để đổi vị trí.
+- Bấm vào chữ: chi tiết từ, phát âm, đang ở **Tuần · Ngày x/7**, nút **Bắt đầu phiên học**.
+- **Phiên học**: lật thẻ học từ mới (Space, ←/→), rồi trắc nghiệm hai chiều (phím 1–4, Enter). App tự chấm: đúng thì giãn lịch ôn (2, 6, 15… ngày), sai thì ôn lại ngày mai.
+- **Bài kiểm tra** (📝 trên popup, menu khay, Thư viện → *Khóa học* → *Tạo bài kiểm tra*, hoặc *Sửa lộ trình* → *Kiểm tra ngày này*): chọn lộ trình, khoảng ngày, số câu (10/20/30/40/tất cả) và dạng câu — trắc nghiệm từ → nghĩa, nghĩa → từ, gõ từ khi nhìn nghĩa (có gợi ý chữ cái đầu), nghe phát âm rồi chọn từ. Làm như bài thi: chọn đáp án là tự sang câu tiếp, "Câu tiếp" luôn bấm được (bỏ trống được), "Câu trước" để quay lại sửa; chỉ chấm điểm khi bấm **Nộp bài** (câu bỏ trống tính sai). Cuối bài có điểm, thời gian, điểm theo từng dạng và danh sách câu sai; làm lại câu sai. Kết quả không làm thay đổi lịch ôn; từ sai được lưu vào danh sách từ sai.
+- **Ngày học từ sai**: mọi từ trả lời sai (bài kiểm tra và phiên học) được lưu vào danh sách từ sai. Cuối bài kiểm tra, hoặc trên popup khi có từ 5 từ sai trở lên, app đề xuất tạo một ngày học từ sai (tối đa 30 từ, sai nhiều nhất trước) — chọn **Học hôm nay** hoặc **Để ngày mai**. Ngày đó thay cho bài của lộ trình (lật thẻ xem lại rồi trắc nghiệm), lộ trình tạm nghỉ và hôm sau học tiếp; dời sang ngày mai hoặc hủy được trên popup. Từ trả lời đúng trong ngày học từ sai ra khỏi danh sách, từ còn sai ở lại. Từ sai mới trước ngày đó được tự thêm vào.
+- Học xong mới sang ngày sau; bỏ học vài hôm thì quay lại học đúng ngày dang dở. Hết tuần hiện tổng kết và tự sang tuần kế.
+- Nhắc học bằng thông báo Windows lúc bắt đầu ngày và vào giờ tự chọn buổi tối (nếu chưa học).
+- **📊 Thống kê**: streak, kỷ lục, số từ đã thuộc/đang học/đến hạn, 30 ngày, từ hay quên, nút **Tạo tuần ôn** từ những từ hay quên.
+
+**Thư viện** (chuột phải chữ trên taskbar, nút ⚙, hoặc nhấp đúp icon khay)
+- **Khóa học**: thứ tự các tuần (đổi thứ tự các tuần đang chờ), bỏ khỏi / thêm vào khóa học.
+- **Sửa lộ trình**: sửa trực tiếp từng ô, thêm/xóa từ, thêm ngày, đặt tiêu đề ngày, **Học từ ngày này**, **Tạo lại ngày này bằng prompt**, **Xuất ra file .md**, xóa lộ trình.
+- **Tạo chủ đề mới**: nhập chủ đề, số ngày, số từ, trình độ → **Sao chép prompt** → dán vào Claude/ChatGPT/Gemini → dán câu trả lời → **Xem trước** (báo lỗi và cảnh báo: thiếu từ, thiếu phiên âm/nghĩa/ví dụ, trùng từ…) → **Nhập vào khóa học**. Cũng mở được file `.md`/`.json` đã xuất.
+- **Cài đặt**: hiển thị, thời gian đổi từ, số từ ôn tối đa mỗi ngày, nhắc học, chạy cùng Windows, **kiểu chữ trên taskbar** (phông, cỡ, đậm/nghiêng, màu chữ và màu đáp án, đổ bóng, nền sau chữ và độ đậm nền, độ rộng tối đa — có xem trước trực tiếp và nút về mặc định), mở thư mục dữ liệu, sao lưu.
+
+## Chuyển sang máy khác
+
+**Máy gửi**: Thư viện → *Khóa học* → **Xuất / chép sang máy khác…** → chọn lộ trình (mặc định cả khóa học, theo thứ tự), rồi:
+- **Lưu file .voca…** — chuyển đầy đủ; có thể **kèm tiến độ học** (lịch ôn từng từ, streak, vị trí đang học). Chép file qua USB, email, Drive…
+- **Sao chép dạng văn bản** — nhiều lộ trình theo form mẫu, dán qua chat/email (chỉ có từ, không có tiến độ).
+
+**Máy nhận**: Thư viện → *Cài đặt* → **Nhập từ máy khác…** (chọn file .voca), hoặc dán văn bản vào *Tạo chủ đề mới* → **Xem trước** → **Nhập**.
+- Lộ trình đã có (cùng tên hoặc ≥ 80% từ giống nhau) **không bị trùng**; tiến độ trong file chỉ được dùng khi **mới hơn** tiến độ trên máy nhận.
+- Lộ trình mới được thêm vào cuối khóa học theo đúng thứ tự trong file. Nếu file có vị trí đang học, app hỏi có chuyển theo không.
+
+## Chuyển từ Voca 1
+
+Lần mở đầu tiên, nếu máy có dữ liệu Voca 1 (`%LOCALAPPDATA%\VocaTaskbar\vocabulary.json`), v2 tự nhập:
+- mọi lộ trình Voca 1 đã đồng bộ (ví dụ các bộ tạo trên trang web cũ như *Du lịch*) — bộ trùng với khóa học có sẵn (cùng tên hoặc ≥ 80% từ giống nhau) chỉ được chép tiến độ, không tạo bản sao;
+- tiến độ từng từ, nhật ký các ngày (streak), vị trí đang học, cài đặt hiển thị, vị trí chữ trên taskbar;
+- từ đã học nhưng không thuộc lộ trình nào → lộ trình *Từ đã học ở Voca 1* (ngoài khóa học, vẫn được ôn).
+
+Muốn chạy lại: **Thư viện → Cài đặt → Nhập lại từ Voca 1** (chạy nhiều lần không tạo bản sao). Từ nhập tay ở các bản rất cũ đã được Voca 1 xuất ra `vocabulary-local-export.md`; nhập file đó bằng **Tạo chủ đề mới → Mở file .md…**.
+
+## Dữ liệu
+
+Tất cả nằm trong `%LOCALAPPDATA%\Voca\voca.json`, ghi an toàn (file tạm + thay thế), luôn giữ bản `.bak`. File hỏng sẽ được giữ lại thành `voca.json.corrupt-<thời gian>` và tự khôi phục từ `.bak`.
+
+## Form nhập (AI trả về đúng form này)
+
+```markdown
+# Tên bộ từ: Travel — 7 ngày × 20 từ
+Cấp độ: B1–B2
+Mô tả: Từ vựng du lịch cho giao tiếp và IELTS
+
+## Ngày 1 — Sân bay và chuyến bay
+
+| STT | Từ | Phiên âm | Loại | Nghĩa | Ví dụ |
+|---|---|---|---|---|---|
+| 1 | boarding pass | /ˈbɔːdɪŋ pɑːs/ | n | thẻ lên máy bay | Please show your boarding pass at the gate. |
+```
+
+## Cấu trúc mã
+
+| Thư mục / file | Vai trò |
+|---|---|
+| `Models/AppData.cs` | Toàn bộ dữ liệu: cài đặt, lộ trình (ngày, từ), thứ tự khóa học, vị trí học, nhật ký |
+| `Services/Store.cs` | Kho dữ liệu duy nhất dùng chung cho mọi cửa sổ, lưu an toàn, sự kiện `Changed` |
+| `Services/CourseEngine.cs` | Quy tắc khóa học: từ hôm nay, chuyển ngày/tuần, sắp xếp, trắc nghiệm, ghi kết quả, tuần ôn |
+| `Services/ReviewScheduler.cs` | Thuật toán ôn tập ngắt quãng (SM-2 rút gọn) |
+| `Services/PlanFormat.cs` | Đọc/kiểm tra form (Markdown, JSON), tạo prompt, xuất form |
+| `Services/SeedData.cs` + `Seed/*.md` | Khóa học có sẵn |
+| `MainWindow` | Chữ trên taskbar, popup, nhắc học |
+| `SessionWindow`, `WeekSummaryWindow`, `StatsWindow`, `LibraryWindow` | Phiên học, tổng kết tuần, thống kê, thư viện |
+| `tests/Voca.Checks` | Kiểm tra hành vi |

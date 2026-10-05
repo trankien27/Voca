@@ -1,0 +1,84 @@
+<Window x:Class="Voca.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Voca" Height="48" SizeToContent="Width" MinWidth="120" MaxWidth="340"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="NoResize" ShowInTaskbar="False" ShowActivated="False" Topmost="True">
+    <Grid>
+        <Border x:Name="WordPill" Background="Transparent"
+                BorderThickness="0" Padding="8,6"
+                PreviewMouseLeftButtonDown="WordPill_MouseLeftButtonDown"
+                PreviewMouseMove="WordPill_MouseMove"
+                PreviewMouseLeftButtonUp="WordPill_MouseLeftButtonUp"
+                MouseEnter="WordPill_MouseEnter"
+                MouseRightButtonUp="WordPill_RightClick" Cursor="Hand">
+            <TextBlock x:Name="WordText" FontSize="16" FontWeight="SemiBold" Foreground="#F7F7FA"
+                       VerticalAlignment="Center" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis">
+                <TextBlock.Effect>
+                    <DropShadowEffect Color="#000000" BlurRadius="3" ShadowDepth="1" Opacity="0.8"/>
+                </TextBlock.Effect>
+            </TextBlock>
+        </Border>
+        <Popup x:Name="DetailPopup" Placement="Top" PlacementTarget="{Binding ElementName=WordPill}"
+               AllowsTransparency="True" StaysOpen="False" PopupAnimation="Fade" VerticalOffset="-8">
+            <Border Width="300" CornerRadius="18" Background="White" BorderBrush="#E6E3F5" BorderThickness="1"
+                    Padding="18" Margin="5">
+                <Border.Effect><DropShadowEffect BlurRadius="18" ShadowDepth="4" Opacity="0.18"/></Border.Effect>
+                <StackPanel>
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Content="⚙" Click="Settings_Click" ToolTip="Cấu hình" />
+                        <Button DockPanel.Dock="Right" Content="📝" Click="Test_Click" ToolTip="Tạo bài kiểm tra" />
+                        <Button DockPanel.Dock="Right" Content="📊" Click="Stats_Click" ToolTip="Thống kê" />
+                        <Border x:Name="KindBadge" DockPanel.Dock="Top" HorizontalAlignment="Left" CornerRadius="6"
+                                Padding="7,1" Margin="0,0,0,4" Background="#EEF4FF">
+                            <TextBlock x:Name="KindText" FontSize="10" FontWeight="SemiBold" Foreground="#3555C0" MaxWidth="190" TextTrimming="CharacterEllipsis"/>
+                        </Border>
+                        <TextBlock x:Name="DetailWord" FontSize="24" FontWeight="Bold" Foreground="{StaticResource Ink}"
+                                   TextWrapping="Wrap" />
+                    </DockPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,3,0,10">
+                        <TextBlock x:Name="PhoneticText" FontSize="14" Foreground="{StaticResource Accent}" />
+                        <TextBlock x:Name="PartOfSpeechText" FontSize="13" FontStyle="Italic" Foreground="{StaticResource Muted}" Margin="8,0,0,0" />
+                    </StackPanel>
+                    <TextBlock x:Name="MeaningText" FontSize="15" Foreground="{StaticResource Ink}" TextWrapping="Wrap" Margin="0,0,0,13"/>
+                    <Border x:Name="ExamplePanel" Background="#F7F6FF" CornerRadius="8" Padding="10,7" Margin="0,0,0,10">
+                        <TextBlock x:Name="ExampleText" FontSize="13" FontStyle="Italic" Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+                    </Border>
+                    <Border x:Name="CoursePanel" Background="#F7F6FF" CornerRadius="10" Padding="10,8" Margin="0,0,0,8">
+                        <StackPanel>
+                            <TextBlock x:Name="CourseEyebrow" FontSize="10" FontWeight="Bold" Foreground="{StaticResource Accent}" TextTrimming="CharacterEllipsis"/>
+                            <UniformGrid x:Name="WeekDots" Rows="1" Margin="-2,6,-2,6"/>
+                            <TextBlock x:Name="CourseStatusText" FontSize="12" Foreground="{StaticResource Ink}" TextWrapping="Wrap"/>
+                            <Button x:Name="SessionButton" Content="Bắt đầu phiên học" Click="Session_Click" Margin="0,8,0,0"
+                                    Background="{StaticResource Accent}" Foreground="White" HorizontalAlignment="Stretch"/>
+                        </StackPanel>
+                    </Border>
+                    <Border x:Name="MistakePanel" Background="#FFF6ED" CornerRadius="10" Padding="10,8" Margin="0,0,0,8" Visibility="Collapsed">
+                        <StackPanel>
+                            <TextBlock x:Name="MistakeText" FontSize="12" Foreground="{StaticResource Ink}" TextWrapping="Wrap"/>
+                            <WrapPanel Margin="-3,6,0,0">
+                                <Button x:Name="MistakeTodayButton" Content="Học hôm nay" Click="MistakeToday_Click" Padding="9,4"
+                                        Background="#B54708" Foreground="White"/>
+                                <Button x:Name="MistakeTomorrowButton" Content="Để ngày mai" Click="MistakeTomorrow_Click" Padding="9,4"
+                                        Background="#FEDFC4" Foreground="#93370D"/>
+                                <Button x:Name="MistakeCancelButton" Content="Hủy" Click="MistakeCancel_Click" Padding="9,4"
+                                        Background="Transparent" Foreground="#93370D"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+                    <TextBlock x:Name="ReviewInfoText" FontSize="11" Foreground="{StaticResource Muted}"
+                               HorizontalAlignment="Center" Margin="0,0,0,6"/>
+                    <DockPanel>
+                        <Button Content="🔊  Phát âm" Click="Speak_Click" />
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <Button Content="‹" Click="Previous_Click" ToolTip="Từ trước" />
+                            <Button Content="›" Click="Next_Click" ToolTip="Từ tiếp theo" />
+                        </StackPanel>
+                    </DockPanel>
+                    <TextBlock x:Name="ProgressText" Foreground="{StaticResource Muted}" FontSize="11" HorizontalAlignment="Center"
+                               TextWrapping="Wrap" TextAlignment="Center" Margin="0,8,0,0"/>
+                </StackPanel>
+            </Border>
+        </Popup>
+    </Grid>
+</Window>

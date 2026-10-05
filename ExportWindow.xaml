@@ -1,0 +1,43 @@
+<Window x:Class="Voca.ExportWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Xuất sang máy khác" Width="560" Height="600" MinHeight="420"
+        WindowStartupLocation="CenterOwner" Background="#F7F7FB" ShowInTaskbar="False">
+    <DockPanel Margin="18">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock Text="Xuất danh sách từ sang máy khác" FontSize="19" FontWeight="Bold" Foreground="{StaticResource Ink}"/>
+            <TextBlock Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,10"
+                       Text="Chọn lộ trình cần chuyển. Trên máy kia: mở file .voca bằng Thư viện → Cài đặt → Nhập từ máy khác, hoặc dán văn bản vào Tạo chủ đề mới. Lộ trình đã có sẽ không bị trùng."/>
+            <WrapPanel Margin="0,0,0,6">
+                <Button Content="Chọn tất cả" Click="SelectAll_Click"/>
+                <Button Content="Chỉ khóa học" Click="SelectCourse_Click"/>
+                <Button Content="Bỏ chọn" Click="SelectNone_Click"/>
+            </WrapPanel>
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+            <CheckBox x:Name="IncludeProgressBox" IsChecked="True" Margin="0,0,0,10"
+                      Content="Kèm tiến độ học (lịch ôn từng từ, streak, vị trí đang học) — chỉ áp dụng cho file .voca"/>
+            <WrapPanel>
+                <Button Content="Lưu file .voca…" Click="SaveFile_Click" Background="{StaticResource Accent}" Foreground="White"/>
+                <Button Content="Sao chép dạng văn bản" Click="CopyText_Click"
+                        ToolTip="Các lộ trình theo form mẫu; dán qua chat/email rồi dán vào Tạo chủ đề mới ở máy kia"/>
+                <Button Content="Đóng" Click="Close_Click" Background="#ECECF2" Foreground="#444"/>
+            </WrapPanel>
+            <TextBlock x:Name="StatusText" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="4,8,0,0"/>
+        </StackPanel>
+        <Border Background="White" CornerRadius="10" BorderBrush="#E6E3F5" BorderThickness="1">
+            <ListBox x:Name="PlansList" BorderThickness="0" HorizontalContentAlignment="Stretch">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <CheckBox IsChecked="{Binding Selected, Mode=TwoWay}" Margin="2,4" Checked="Selection_Changed" Unchecked="Selection_Changed">
+                            <StackPanel>
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                <TextBlock Text="{Binding Meta}" FontSize="12" Foreground="{StaticResource Muted}"/>
+                            </StackPanel>
+                        </CheckBox>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+    </DockPanel>
+</Window>

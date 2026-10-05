@@ -1,0 +1,18 @@
+<Application x:Class="Voca.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <SolidColorBrush x:Key="Ink" Color="#172033" />
+        <SolidColorBrush x:Key="Muted" Color="#667085" />
+        <SolidColorBrush x:Key="Accent" Color="#6C5CE7" />
+        <Style TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="Margin" Value="3" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="#F0EEFF" />
+            <Setter Property="Foreground" Value="#4B3CC4" />
+        </Style>
+    </Application.Resources>
+</Application>

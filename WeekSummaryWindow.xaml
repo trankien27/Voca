@@ -1,0 +1,36 @@
+<Window x:Class="Voca.WeekSummaryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Tổng kết tuần" Width="520" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen" Background="#F7F7FB">
+    <StackPanel Margin="26,22">
+        <TextBlock Text="HOÀN THÀNH" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Accent}"/>
+        <TextBlock x:Name="TitleText" FontFamily="Georgia" FontSize="28" Foreground="{StaticResource Ink}" TextWrapping="Wrap" Margin="0,2,0,14"/>
+        <UniformGrid Columns="3" Margin="-5,0">
+            <Border Background="White" CornerRadius="12" Padding="12" Margin="5"><StackPanel>
+                <TextBlock x:Name="LearnedText" FontSize="24" FontWeight="Bold" Foreground="{StaticResource Ink}"/>
+                <TextBlock Text="từ đã học" Foreground="{StaticResource Muted}" FontSize="12"/></StackPanel></Border>
+            <Border Background="White" CornerRadius="12" Padding="12" Margin="5"><StackPanel>
+                <TextBlock x:Name="FirstTryText" FontSize="24" FontWeight="Bold" Foreground="#067647"/>
+                <TextBlock Text="chưa sai lần nào" Foreground="{StaticResource Muted}" FontSize="12"/></StackPanel></Border>
+            <Border Background="White" CornerRadius="12" Padding="12" Margin="5"><StackPanel>
+                <TextBlock x:Name="ReviewText" FontSize="24" FontWeight="Bold" Foreground="#B54708"/>
+                <TextBlock Text="sẽ được ôn thêm" Foreground="{StaticResource Muted}" FontSize="12"/></StackPanel></Border>
+        </UniformGrid>
+        <TextBlock Text="Hay sai nhất" FontWeight="SemiBold" Foreground="{StaticResource Ink}" Margin="0,16,0,6"/>
+        <ItemsControl x:Name="ForgottenList">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <DockPanel Margin="0,3">
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding Count}" Foreground="#B42318" FontSize="12"/>
+                        <TextBlock TextTrimming="CharacterEllipsis"><Run Text="{Binding Word, Mode=OneWay}" FontWeight="SemiBold"/><Run Text="{Binding Meaning, Mode=OneWay}" Foreground="#667085"/></TextBlock>
+                    </DockPanel>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock x:Name="NoMistakesText" Text="Không có từ nào bị sai. Xuất sắc!" Foreground="{StaticResource Muted}" Visibility="Collapsed"/>
+        <TextBlock x:Name="NextText" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,16,0,0"/>
+        <Button x:Name="ContinueButton" Content="Tiếp tục" Click="Continue_Click" HorizontalAlignment="Right" Margin="0,14,0,0"
+                Background="{StaticResource Accent}" Foreground="White"/>
+    </StackPanel>
+</Window>

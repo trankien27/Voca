@@ -1,0 +1,410 @@
+<Window x:Class="Voca.LibraryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Voca · Thư viện" Width="1040" Height="740" MinWidth="860" MinHeight="580"
+        WindowStartupLocation="CenterScreen" Background="#F7F7FB">
+    <Window.Resources>
+        <Style x:Key="H" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="15"/><Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+        <Style x:Key="Hint" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource Muted}"/><Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{StaticResource Accent}"/><Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style x:Key="Danger" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="#FEE4E2"/><Setter Property="Foreground" Value="#B42318"/>
+        </Style>
+        <Style x:Key="Panel" TargetType="Border">
+            <Setter Property="Background" Value="White"/><Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="BorderBrush" Value="#E6E3F5"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Padding" Value="14"/>
+        </Style>
+        <DataTemplate x:Key="PlanItem">
+            <DockPanel Margin="2,4">
+                <Border DockPanel.Dock="Right" CornerRadius="9" Padding="8,2" Background="{Binding ChipBrush}" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Chip}" FontSize="11" FontWeight="SemiBold" Foreground="{Binding ChipInk}"/>
+                </Border>
+                <TextBlock DockPanel.Dock="Left" Text="{Binding Order}" Width="26" FontWeight="Bold" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+                <StackPanel>
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding Meta}" FontSize="12" Foreground="{StaticResource Muted}"/>
+                </StackPanel>
+            </DockPanel>
+        </DataTemplate>
+    </Window.Resources>
+
+    <DockPanel Margin="16">
+        <TextBlock DockPanel.Dock="Bottom" x:Name="StatusText" Margin="4,10,0,0" Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+        <TabControl x:Name="Tabs" Background="Transparent" BorderThickness="0" Padding="0,10,0,0">
+
+            <!-- ================= Course ================= -->
+            <TabItem Header="  Khóa học  " x:Name="CourseTab">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition Width="340"/></Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource Panel}">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Style="{StaticResource H}" Text="Khóa học của tôi"/>
+                            <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" Margin="0,0,0,10"
+                                       Text="App học lần lượt theo thứ tự này: học xong một ngày thì hôm sau sang ngày tiếp, hết tuần tự sang tuần sau."/>
+                            <WrapPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                                <Button Content="↑ Lên" Click="MoveUp_Click"/>
+                                <Button Content="↓ Xuống" Click="MoveDown_Click"/>
+                                <Button Content="Bỏ khỏi khóa học" Click="RemoveFromCourse_Click"/>
+                                <Button Content="Mở để sửa" Click="EditCourseItem_Click"/>
+                                <Button Content="📝 Tạo bài kiểm tra" Click="CourseTest_Click"
+                                        ToolTip="Kiểm tra lộ trình đang chọn: chọn khoảng ngày, số câu và dạng câu hỏi"/>
+                                <Button Content="Xuất / chép sang máy khác…" Click="Export_Click" Style="{StaticResource Primary}"/>
+                            </WrapPanel>
+                            <ListBox x:Name="CourseList" ItemTemplate="{StaticResource PlanItem}" HorizontalContentAlignment="Stretch"
+                                     BorderThickness="0" MouseDoubleClick="EditCourseItem_Click"/>
+                        </DockPanel>
+                    </Border>
+                    <Border Grid.Column="2" Style="{StaticResource Panel}">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Style="{StaticResource H}" Text="Ngoài khóa học"/>
+                            <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" Margin="0,0,0,10"
+                                       Text="Lộ trình đã bỏ khỏi khóa học vẫn được giữ, từ đã học vẫn được ôn."/>
+                            <WrapPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                                <Button Content="Thêm vào cuối khóa" Click="AddToCourse_Click" Style="{StaticResource Primary}"/>
+                                <Button Content="Mở để sửa" Click="EditOutsideItem_Click"/>
+                            </WrapPanel>
+                            <ListBox x:Name="OutsideList" ItemTemplate="{StaticResource PlanItem}" HorizontalContentAlignment="Stretch"
+                                     BorderThickness="0" MouseDoubleClick="EditOutsideItem_Click"/>
+                        </DockPanel>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- ================= Plan editor ================= -->
+            <TabItem Header="  Sửa lộ trình  " x:Name="EditTab">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Style="{StaticResource Panel}" Margin="0,0,0,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/><ColumnDefinition Width="2*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="100"/>
+                                <ColumnDefinition Width="Auto"/><ColumnDefinition Width="2*"/><ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <TextBlock Text="Lộ trình" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <ComboBox x:Name="PlanBox" Grid.Column="1" Grid.ColumnSpan="5" DisplayMemberPath="Name" Padding="5"
+                                      SelectionChanged="PlanBox_SelectionChanged"/>
+                            <StackPanel Grid.Column="6" Orientation="Horizontal" Margin="8,0,0,0">
+                                <Button Content="Xuất ra file…" Click="ExportPlan_Click"/>
+                                <Button Content="Xóa lộ trình" Click="DeletePlan_Click" Style="{StaticResource Danger}"/>
+                            </StackPanel>
+                            <TextBlock Grid.Row="1" Text="Tên" VerticalAlignment="Center" Margin="0,10,8,0"/>
+                            <TextBox x:Name="PlanNameBox" Grid.Row="1" Grid.Column="1" Padding="5" Margin="0,10,0,0"/>
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Cấp độ" VerticalAlignment="Center" Margin="12,10,8,0"/>
+                            <TextBox x:Name="PlanLevelBox" Grid.Row="1" Grid.Column="3" Padding="5" Margin="0,10,0,0"/>
+                            <TextBlock Grid.Row="1" Grid.Column="4" Text="Mô tả" VerticalAlignment="Center" Margin="12,10,8,0"/>
+                            <TextBox x:Name="PlanDescriptionBox" Grid.Row="1" Grid.Column="5" Padding="5" Margin="0,10,0,0"/>
+                            <Button Grid.Row="1" Grid.Column="6" Content="Lưu thông tin" Click="SavePlanInfo_Click" Margin="11,13,3,3"/>
+                        </Grid>
+                    </Border>
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="230"/><ColumnDefinition Width="12"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource Panel}" Padding="8">
+                            <DockPanel>
+                                <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                                    <TextBox x:Name="DayTitleBox" Padding="5" ToolTip="Tiêu đề (chủ đề con) của ngày đang chọn"/>
+                                    <WrapPanel>
+                                        <Button Content="Lưu tiêu đề" Click="SaveDayTitle_Click"/>
+                                        <Button Content="＋ Ngày mới" Click="AddDay_Click"/>
+                                    </WrapPanel>
+                                </StackPanel>
+                                <ListBox x:Name="DaysList" DisplayMemberPath="Label" BorderThickness="0" SelectionChanged="DaysList_SelectionChanged" ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
+                            </DockPanel>
+                        </Border>
+                        <Border Grid.Column="2" Style="{StaticResource Panel}" Padding="10">
+                            <DockPanel>
+                                <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                                    <Button Content="＋ Thêm từ" Click="AddWord_Click"/>
+                                    <Button Content="Xóa từ đã chọn" Click="DeleteWord_Click"/>
+                                    <Button Content="▶ Học từ ngày này" Click="StudyFromDay_Click" Style="{StaticResource Primary}"/>
+                                    <Button Content="📝 Kiểm tra ngày này" Click="DayTest_Click"
+                                            ToolTip="Tạo bài kiểm tra cho ngày đang chọn (đổi được khoảng ngày trước khi bắt đầu)"/>
+                                    <Button Content="Tạo lại ngày này bằng prompt" Click="RegenDay_Click"/>
+                                </WrapPanel>
+                                <Border DockPanel.Dock="Bottom" x:Name="RegenPanel" Visibility="Collapsed" Margin="0,8,0,0"
+                                        BorderBrush="{StaticResource Accent}" BorderThickness="1" CornerRadius="10" Padding="10">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" Margin="0,0,0,6"
+                                                   Text="Prompt cho ngày này đã được sao chép. Dán vào AI (Claude, ChatGPT…), rồi dán câu trả lời vào đây. Các từ hiện tại của ngày sẽ được thay thế."/>
+                                        <WrapPanel DockPanel.Dock="Bottom" Margin="0,6,0,0">
+                                            <Button Content="Thay ngày này" Click="ApplyRegen_Click" Style="{StaticResource Primary}"/>
+                                            <Button Content="Sao chép lại prompt" Click="RegenDay_Click"/>
+                                            <Button Content="Hủy" Click="CancelRegen_Click"/>
+                                        </WrapPanel>
+                                        <TextBox x:Name="RegenBox" Height="110" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                                                 TextWrapping="NoWrap" FontFamily="Consolas" Padding="6"/>
+                                    </DockPanel>
+                                </Border>
+                                <DataGrid x:Name="WordsGrid" AutoGenerateColumns="False" CanUserAddRows="False" SelectionMode="Extended"
+                                          GridLinesVisibility="Horizontal" Background="White" BorderBrush="#E5E5EF" RowHeaderWidth="0"
+                                          CellEditEnding="WordsGrid_CellEditEnding">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Từ" Binding="{Binding Text, UpdateSourceTrigger=LostFocus}" Width="1.1*"/>
+                                        <DataGridTextColumn Header="Phiên âm" Binding="{Binding Phonetic, UpdateSourceTrigger=LostFocus}" Width="1.1*"/>
+                                        <DataGridTextColumn Header="Loại" Binding="{Binding PartOfSpeech, UpdateSourceTrigger=LostFocus}" Width="0.5*"/>
+                                        <DataGridTextColumn Header="Nghĩa" Binding="{Binding Meaning, UpdateSourceTrigger=LostFocus}" Width="1.5*"/>
+                                        <DataGridTextColumn Header="Ví dụ" Binding="{Binding Example, UpdateSourceTrigger=LostFocus}" Width="2*"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </DockPanel>
+                        </Border>
+                    </Grid>
+                </DockPanel>
+            </TabItem>
+
+            <!-- ================= Create ================= -->
+            <TabItem Header="  Tạo chủ đề mới  " x:Name="CreateTab">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <Border Style="{StaticResource Panel}" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource H}" Text="1 · Thông tin"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/><ColumnDefinition Width="2*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="60"/>
+                                        <ColumnDefinition Width="Auto"/><ColumnDefinition Width="60"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="110"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                    <TextBlock Text="Chủ đề" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <TextBox x:Name="TopicBox" Grid.Column="1" Padding="5" TextChanged="CreateInput_Changed"
+                                             ToolTip="Ví dụ: Travel, Du lịch bụi, IELTS Speaking Part 1"/>
+                                    <TextBlock Grid.Column="2" Text="Số ngày" VerticalAlignment="Center" Margin="14,0,8,0"/>
+                                    <TextBox x:Name="DaysBox" Grid.Column="3" Padding="5" Text="7" TextChanged="CreateInput_Changed"/>
+                                    <TextBlock Grid.Column="4" Text="Từ/ngày" VerticalAlignment="Center" Margin="14,0,8,0"/>
+                                    <TextBox x:Name="PerDayBox" Grid.Column="5" Padding="5" Text="20" TextChanged="CreateInput_Changed"/>
+                                    <TextBlock Grid.Column="6" Text="Trình độ" VerticalAlignment="Center" Margin="14,0,8,0"/>
+                                    <ComboBox x:Name="LevelBox" Grid.Column="7" Padding="5" SelectedIndex="1" SelectionChanged="CreateInput_Changed">
+                                        <ComboBoxItem Content="A2–B1"/><ComboBoxItem Content="B1–B2"/><ComboBoxItem Content="B2–C1"/><ComboBoxItem Content="A2–C1"/>
+                                    </ComboBox>
+                                    <TextBlock Grid.Row="1" Text="Yêu cầu thêm" VerticalAlignment="Center" Margin="0,10,8,0"/>
+                                    <TextBox x:Name="ExtraBox" Grid.Row="1" Grid.Column="1" Padding="5" Margin="0,10,0,0" TextChanged="CreateInput_Changed"
+                                             ToolTip="Không bắt buộc. Ví dụ: ưu tiên cụm từ dùng khi nói"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="2" Text="Tên bộ từ" VerticalAlignment="Center" Margin="14,10,8,0"/>
+                                    <TextBox x:Name="NameBox" Grid.Row="1" Grid.Column="3" Grid.ColumnSpan="5" Padding="5" Margin="0,10,0,0" TextChanged="CreateInput_Changed"
+                                             ToolTip="Để trống thì tự đặt theo chủ đề"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Panel}" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource H}" Text="2 · Prompt cho AI"/>
+                                <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,8"
+                                           Text="Dán prompt này vào Claude, ChatGPT hoặc Gemini. AI sẽ trả lời bằng đúng form mẫu. Nếu AI dừng giữa chừng, nhắn “tiếp tục” rồi copy nối cả phần sau."/>
+                                <TextBox x:Name="PromptBox" Height="150" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                         FontFamily="Consolas" Padding="6" Background="#F7F7FB"/>
+                                <WrapPanel Margin="0,8,0,0">
+                                    <Button x:Name="CopyPromptButton" Content="Sao chép prompt" Click="CopyPrompt_Click" Style="{StaticResource Primary}"/>
+                                    <Button Content="Lưu form mẫu…" Click="SaveTemplate_Click"/>
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Panel}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource H}" Text="3 · Dán kết quả và nhập"/>
+                                <TextBox x:Name="ResultBox" Height="170" AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
+                                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" Padding="6"
+                                         TextChanged="ResultBox_TextChanged"
+                                         ToolTip="Dán toàn bộ câu trả lời của AI (form Markdown hoặc JSON đều được)"/>
+                                <WrapPanel Margin="0,8,0,0">
+                                    <Button Content="Xem trước" Click="Preview_Click"/>
+                                    <Button x:Name="ImportButton" Content="Nhập vào khóa học" Click="Import_Click" Style="{StaticResource Primary}" IsEnabled="False"/>
+                                    <Button Content="Mở file .md…" Click="OpenFile_Click"/>
+                                </WrapPanel>
+                                <StackPanel x:Name="PreviewPanel" Margin="0,10,0,0" Visibility="Collapsed">
+                                    <TextBlock x:Name="PreviewTitle" FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource Ink}"/>
+                                    <Border x:Name="ErrorsBox" Background="#FDECEA" CornerRadius="8" Padding="10" Margin="0,8,0,0">
+                                        <TextBlock x:Name="ErrorsText" Foreground="#B42318" TextWrapping="Wrap"/>
+                                    </Border>
+                                    <Border x:Name="WarningsBox" Background="#FFF8E6" CornerRadius="8" Padding="10" Margin="0,8,0,0">
+                                        <TextBlock x:Name="WarningsText" Foreground="#7A4B00" TextWrapping="Wrap"/>
+                                    </Border>
+                                    <ItemsControl x:Name="PreviewDays" Margin="0,8,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Background="#F7F7FB" CornerRadius="8" Padding="10,6" Margin="0,0,0,4">
+                                                    <StackPanel>
+                                                        <DockPanel>
+                                                            <TextBlock DockPanel.Dock="Right" Text="{Binding Count}" FontWeight="Bold" Foreground="{Binding CountInk}"/>
+                                                            <TextBlock Text="{Binding Title}" Foreground="{StaticResource Ink}"/>
+                                                        </DockPanel>
+                                                        <TextBlock Text="{Binding Sample}" FontSize="12" Foreground="{StaticResource Muted}" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ================= Settings ================= -->
+            <TabItem Header="  Cài đặt  " x:Name="SettingsTab">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel MaxWidth="720" HorizontalAlignment="Left">
+                        <Border Style="{StaticResource Panel}" Margin="0,0,0,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.ColumnSpan="2" Style="{StaticResource H}" Text="Hiển thị và học"/>
+                                <TextBlock Grid.Row="1" Text="Hiển thị trên taskbar" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="DisplayModeBox" Grid.Row="1" Grid.Column="1" Padding="5" Margin="0,4" Width="240" HorizontalAlignment="Left">
+                                    <ComboBoxItem Content="Chỉ từ vựng" Tag="word"/>
+                                    <ComboBoxItem Content="Flashcard: từ → nghĩa" Tag="flash"/>
+                                    <ComboBoxItem Content="Flashcard: nghĩa → từ" Tag="reverse"/>
+                                </ComboBox>
+                                <TextBlock Grid.Row="2" Text="Đổi từ sau (giây)" VerticalAlignment="Center"/>
+                                <TextBox x:Name="RotationBox" Grid.Row="2" Grid.Column="1" Width="80" HorizontalAlignment="Left" Padding="5" Margin="0,4"/>
+                                <TextBlock Grid.Row="3" Text="Hiện đáp án sau (giây)" VerticalAlignment="Center"/>
+                                <TextBox x:Name="RevealBox" Grid.Row="3" Grid.Column="1" Width="80" HorizontalAlignment="Left" Padding="5" Margin="0,4"
+                                         ToolTip="Chế độ flashcard; rê chuột vào chữ để xem ngay"/>
+                                <TextBlock Grid.Row="4" Text="Ôn tối đa mỗi ngày (từ)" VerticalAlignment="Center"/>
+                                <TextBox x:Name="MaxReviewsBox" Grid.Row="4" Grid.Column="1" Width="80" HorizontalAlignment="Left" Padding="5" Margin="0,4"
+                                         ToolTip="0 = tắt ôn tập"/>
+                                <TextBlock Grid.Row="5" Text="Nhắc học" VerticalAlignment="Center"/>
+                                <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal" Margin="0,4">
+                                    <CheckBox x:Name="MorningReminderBox" Content="Khi bắt đầu ngày" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                                    <TextBlock Text="Nhắc lại lúc" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <ComboBox x:Name="ReminderHourBox" Width="90" Padding="5"/>
+                                </StackPanel>
+                                <TextBlock Grid.Row="6" Text="Khởi động" VerticalAlignment="Center"/>
+                                <CheckBox x:Name="StartWithWindowsBox" Grid.Row="6" Grid.Column="1" Content="Chạy cùng Windows" Margin="0,6"/>
+                                <Button Grid.Row="7" Grid.Column="1" Content="Lưu cài đặt" Click="SaveSettings_Click" Style="{StaticResource Primary}"
+                                        HorizontalAlignment="Left" Margin="0,10,0,0"/>
+                            </Grid>
+                        </Border>
+                        <Border Style="{StaticResource Panel}" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource H}" Text="Chữ trên taskbar"/>
+                                <!-- Preview on a taskbar-like strip; updates as the controls change. -->
+                                <Border Background="#1E2130" CornerRadius="8" Height="76" Margin="0,0,0,6">
+                                    <Grid>
+                                        <TextBlock Text="Xem trước" Foreground="#8A8FA8" FontSize="11" Margin="10,6,0,0"/>
+                                        <Border x:Name="PreviewPill" HorizontalAlignment="Right" Margin="0,4,90,4">
+                                            <TextBlock x:Name="PreviewText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        </Border>
+                                        <TextBlock Text="ENG  21:30" Foreground="#C9CCD8" FontSize="11" HorizontalAlignment="Right"
+                                                   VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                    </Grid>
+                                </Border>
+                                <CheckBox x:Name="PreviewBackBox" Content="Xem mặt đáp án (chế độ flashcard)" Margin="0,0,0,10"
+                                          Checked="PillStyle_Changed" Unchecked="PillStyle_Changed"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="Phông chữ" VerticalAlignment="Center"/>
+                                    <ComboBox x:Name="FontBox" Grid.Column="1" Width="240" HorizontalAlignment="Left" Padding="5" Margin="0,4"
+                                              SelectionChanged="PillStyle_Changed">
+                                        <ComboBox.ItemsPanel>
+                                            <ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate>
+                                        </ComboBox.ItemsPanel>
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate><TextBlock Text="{Binding}" FontFamily="{Binding}" FontSize="14"/></DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+
+                                    <TextBlock Grid.Row="1" Text="Cỡ chữ" VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,4">
+                                        <Slider x:Name="SizeSlider" Width="240" Minimum="10" Maximum="32" TickFrequency="1" IsSnapToTickEnabled="True"
+                                                VerticalAlignment="Center" ValueChanged="PillStyle_Changed"/>
+                                        <TextBlock x:Name="SizeLabel" Width="50" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+
+                                    <TextBlock Grid.Row="2" Text="Kiểu chữ" VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Margin="0,4">
+                                        <ComboBox x:Name="WeightBox" Width="130" Padding="5" SelectionChanged="PillStyle_Changed">
+                                            <ComboBoxItem Content="Thường" Tag="Normal"/>
+                                            <ComboBoxItem Content="Đậm vừa" Tag="SemiBold"/>
+                                            <ComboBoxItem Content="Đậm" Tag="Bold"/>
+                                        </ComboBox>
+                                        <CheckBox x:Name="ItalicBox" Content="Nghiêng" VerticalAlignment="Center" Margin="14,0"
+                                                  Checked="PillStyle_Changed" Unchecked="PillStyle_Changed"/>
+                                        <CheckBox x:Name="ShadowBox" Content="Đổ bóng" VerticalAlignment="Center"
+                                                  Checked="PillStyle_Changed" Unchecked="PillStyle_Changed"
+                                                  ToolTip="Giúp chữ sáng dễ đọc trên taskbar sáng"/>
+                                    </StackPanel>
+
+                                    <TextBlock Grid.Row="3" Text="Màu chữ" VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Margin="0,4">
+                                        <TextBox x:Name="TextColorBox" Width="80" Padding="5" VerticalAlignment="Center" TextChanged="PillStyle_Changed" ToolTip="Mã màu dạng #RRGGBB"/>
+                                        <Button Content="Chọn…" Tag="{Binding ElementName=TextColorBox}" Click="PickColor_Click"/>
+                                        <WrapPanel x:Name="TextColorSwatches" VerticalAlignment="Center"/>
+                                    </StackPanel>
+
+                                    <TextBlock Grid.Row="4" Text="Màu đáp án (flashcard)" VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal" Margin="0,4">
+                                        <TextBox x:Name="RevealColorBox" Width="80" Padding="5" VerticalAlignment="Center" TextChanged="PillStyle_Changed" ToolTip="Mã màu dạng #RRGGBB"/>
+                                        <Button Content="Chọn…" Tag="{Binding ElementName=RevealColorBox}" Click="PickColor_Click"/>
+                                        <WrapPanel x:Name="RevealColorSwatches" VerticalAlignment="Center"/>
+                                    </StackPanel>
+
+                                    <TextBlock Grid.Row="5" Text="Nền sau chữ" VerticalAlignment="Top" Margin="0,9,0,0"/>
+                                    <StackPanel Grid.Row="5" Grid.Column="1" Margin="0,4">
+                                        <StackPanel Orientation="Horizontal">
+                                            <CheckBox x:Name="BackgroundOnBox" Content="Có nền" VerticalAlignment="Center" Margin="0,0,10,0"
+                                                      Checked="PillStyle_Changed" Unchecked="PillStyle_Changed"/>
+                                            <TextBox x:Name="BackgroundColorBox" Width="80" Padding="5" VerticalAlignment="Center" TextChanged="PillStyle_Changed" ToolTip="Mã màu dạng #RRGGBB"/>
+                                            <Button Content="Chọn…" Tag="{Binding ElementName=BackgroundColorBox}" Click="PickColor_Click"/>
+                                            <WrapPanel x:Name="BackgroundSwatches" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                            <TextBlock Text="Độ đậm nền" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                            <Slider x:Name="OpacitySlider" Width="180" Minimum="10" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True"
+                                                    VerticalAlignment="Center" ValueChanged="PillStyle_Changed"/>
+                                            <TextBlock x:Name="OpacityLabel" Width="50" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <TextBlock Grid.Row="6" Text="Độ rộng tối đa" VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal" Margin="0,4">
+                                        <Slider x:Name="WidthSlider" Width="240" Minimum="160" Maximum="700" TickFrequency="20" IsSnapToTickEnabled="True"
+                                                VerticalAlignment="Center" ValueChanged="PillStyle_Changed"
+                                                ToolTip="Chữ dài hơn sẽ bị cắt bằng dấu …; rê chuột vào chữ để xem đủ"/>
+                                        <TextBlock x:Name="WidthLabel" Width="60" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+
+                                    <WrapPanel Grid.Row="7" Grid.Column="1" Margin="-3,10,0,0">
+                                        <Button Content="Lưu kiểu chữ" Click="SavePillStyle_Click" Style="{StaticResource Primary}"/>
+                                        <Button Content="Về mặc định" Click="ResetPillStyle_Click"/>
+                                    </WrapPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Panel}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource H}" Text="Dữ liệu"/>
+                                <TextBlock x:Name="DataPathText" Style="{StaticResource Hint}" Margin="0,0,0,8"/>
+                                <WrapPanel>
+                                    <Button Content="Mở thư mục dữ liệu" Click="OpenDataFolder_Click"/>
+                                    <Button Content="Sao lưu toàn bộ…" Click="Backup_Click"/>
+                                    <Button Content="📊 Thống kê" Click="Stats_Click"/>
+                                    <Button Content="Xuất sang máy khác…" Click="Export_Click"/>
+                                    <Button Content="Nhập từ máy khác…" Click="ImportOther_Click" Style="{StaticResource Primary}"
+                                            ToolTip="Mở file .voca (hoặc .md/.json) xuất từ Voca trên máy khác"/>
+                                    <Button x:Name="ImportV1Button" Content="Nhập lại từ Voca 1" Click="ImportV1_Click"
+                                            ToolTip="Lấy lộ trình và tiến độ từ dữ liệu Voca 1 trên máy này. Chạy nhiều lần không tạo bản sao."/>
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>
