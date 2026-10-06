@@ -44,15 +44,38 @@
                     <Border x:Name="ExamplePanel" Background="#F7F6FF" CornerRadius="8" Padding="10,7" Margin="0,0,0,10">
                         <TextBlock x:Name="ExampleText" FontSize="13" FontStyle="Italic" Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
                     </Border>
+                    <WrapPanel x:Name="QuickRatePanel" Margin="-3,-4,0,8">
+                        <Button Content="✓ Đã thuộc" Click="Learned_Click" Background="#E7F7EE" Foreground="#067647" Padding="10,5"
+                                ToolTip="Không hiện từ này nữa (không vào phiên học và ôn tập). Hoàn tác được."/>
+                        <Button Content="✗ Chưa nhớ" Click="NotRemembered_Click" Background="#FDECEA" Foreground="#B42318" Padding="10,5"
+                                ToolTip="Tính là trả lời sai: ôn lại ngày mai, hôm nay hiện trước trên taskbar"/>
+                    </WrapPanel>
+                    <Border x:Name="UndoPanel" Visibility="Collapsed" Background="#F7F6FF" CornerRadius="8" Padding="10,6" Margin="0,0,0,8">
+                        <DockPanel>
+                            <Button x:Name="UndoButton" DockPanel.Dock="Right" Content="Hoàn tác" Click="Undo_Click" Padding="8,3" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="UndoText" FontSize="12" Foreground="{StaticResource Ink}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </Border>
                     <Border x:Name="CoursePanel" Background="#F7F6FF" CornerRadius="10" Padding="10,8" Margin="0,0,0,8">
                         <StackPanel>
                             <TextBlock x:Name="CourseEyebrow" FontSize="10" FontWeight="Bold" Foreground="{StaticResource Accent}" TextTrimming="CharacterEllipsis"/>
                             <UniformGrid x:Name="WeekDots" Rows="1" Margin="-2,6,-2,6"/>
                             <TextBlock x:Name="CourseStatusText" FontSize="12" Foreground="{StaticResource Ink}" TextWrapping="Wrap"/>
+                            <StackPanel x:Name="NextChoicePanel" Visibility="Collapsed" Margin="0,8,0,0">
+                                <TextBlock x:Name="NextChoiceText" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Ink}" TextWrapping="Wrap"/>
+                                <UniformGrid Columns="2" Margin="-3,4,-3,0">
+                                    <Button x:Name="StudyNextButton" Click="StudyNext_Click" Background="{StaticResource Accent}" Foreground="White"
+                                            FontWeight="SemiBold" Padding="6,7" ToolTip="Sang ngày tiếp theo ngay bây giờ và mở phiên học"/>
+                                    <Button x:Name="TestDoneDaysButton" Click="TestDoneDays_Click" Padding="6,7"
+                                            ToolTip="Kiểm tra các ngày đã học của lộ trình này"/>
+                                </UniformGrid>
+                            </StackPanel>
                             <Button x:Name="SessionButton" Content="Bắt đầu phiên học" Click="Session_Click" Margin="0,8,0,0"
                                     Background="{StaticResource Accent}" Foreground="White" HorizontalAlignment="Stretch"/>
                         </StackPanel>
                     </Border>
+                    <Button x:Name="UpdateLink" Click="UpdateLink_Click" Visibility="Collapsed" HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Left" Background="#ECFDF3" Foreground="#05603A" Padding="10,6" Margin="0,0,0,8" FontSize="12"/>
                     <Button x:Name="MistakesLink" Click="MistakesLink_Click" Visibility="Collapsed" HorizontalAlignment="Stretch"
                             HorizontalContentAlignment="Left" Background="#FFF6ED" Foreground="#93370D" Padding="10,6" Margin="0,0,0,8" FontSize="12"/>
                     <Border x:Name="MistakePanel" Background="#FFF6ED" CornerRadius="10" Padding="10,8" Margin="0,0,0,8" Visibility="Collapsed">

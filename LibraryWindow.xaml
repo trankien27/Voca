@@ -175,6 +175,15 @@
                                         <DataGridTextColumn Header="Loại" Binding="{Binding PartOfSpeech, UpdateSourceTrigger=LostFocus}" Width="0.5*"/>
                                         <DataGridTextColumn Header="Nghĩa" Binding="{Binding Meaning, UpdateSourceTrigger=LostFocus}" Width="1.5*"/>
                                         <DataGridTextColumn Header="Ví dụ" Binding="{Binding Example, UpdateSourceTrigger=LostFocus}" Width="2*"/>
+                                        <DataGridTemplateColumn Header="Đã thuộc" Width="Auto">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <CheckBox IsChecked="{Binding Learned, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Click="LearnedBox_Click"
+                                                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                              ToolTip="Đã thuộc: không hiện trên taskbar, không vào phiên học và ôn tập"/>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </DockPanel>
@@ -358,6 +367,9 @@
             <!-- ================= Mistakes ================= -->
             <TabItem Header="  Từ sai  " x:Name="MistakesTab"/>
 
+            <!-- ================= My words (Ctrl+Alt+V) ================= -->
+            <TabItem Header="  Từ của tôi  " x:Name="MyWordsTab"/>
+
             <!-- ================= Settings ================= -->
             <TabItem Header="  Cài đặt  " x:Name="SettingsTab">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -368,7 +380,7 @@
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/></Grid.RowDefinitions>
                                 <TextBlock Grid.ColumnSpan="2" Style="{StaticResource H}" Text="Hiển thị và học"/>
                                 <TextBlock Grid.Row="1" Text="Hiển thị trên taskbar" VerticalAlignment="Center"/>
                                 <ComboBox x:Name="DisplayModeBox" Grid.Row="1" Grid.Column="1" Padding="5" Margin="0,4" Width="240" HorizontalAlignment="Left">
@@ -392,7 +404,10 @@
                                 </StackPanel>
                                 <TextBlock Grid.Row="6" Text="Khởi động" VerticalAlignment="Center"/>
                                 <CheckBox x:Name="StartWithWindowsBox" Grid.Row="6" Grid.Column="1" Content="Chạy cùng Windows" Margin="0,6"/>
-                                <Button Grid.Row="7" Grid.Column="1" Content="Lưu cài đặt" Click="SaveSettings_Click" Style="{StaticResource Primary}"
+                                <TextBlock Grid.Row="7" Text="Phiên học" VerticalAlignment="Center"/>
+                                <CheckBox x:Name="QuizTypingBox" Grid.Row="7" Grid.Column="1" Margin="0,6"
+                                          Content="Có câu gõ từ và câu điền vào chỗ trống (ngoài trắc nghiệm)"/>
+                                <Button Grid.Row="8" Grid.Column="1" Content="Lưu cài đặt" Click="SaveSettings_Click" Style="{StaticResource Primary}"
                                         HorizontalAlignment="Left" Margin="0,10,0,0"/>
                             </Grid>
                         </Border>
@@ -523,6 +538,8 @@
                                         </DataTemplate>
                                     </ListBox.ItemTemplate>
                                 </ListBox>
+                                <CheckBox x:Name="DailyCheckBox" Margin="0,8,0,0" Checked="DailyCheck_Changed" Unchecked="DailyCheck_Changed"
+                                          Content="Mỗi ngày tự xem có bản mới không và báo trên popup (không tự tải, chỉ cài khi bạn bấm)"/>
                                 <WrapPanel Margin="-3,8,0,0">
                                     <Button x:Name="InstallVersionButton" Content="Chọn một phiên bản" IsEnabled="False" Click="InstallVersion_Click"
                                             Style="{StaticResource Primary}" FontWeight="SemiBold"/>

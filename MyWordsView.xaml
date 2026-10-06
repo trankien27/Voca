@@ -1,0 +1,75 @@
+<UserControl x:Class="Voca.MyWordsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Loaded="View_Loaded" Unloaded="View_Unloaded">
+    <UserControl.Resources>
+        <Style x:Key="Panel" TargetType="Border">
+            <Setter Property="Background" Value="White"/><Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="BorderBrush" Value="#E6E3F5"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Padding" Value="12"/>
+        </Style>
+        <Style x:Key="Step" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14"/><Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+    </UserControl.Resources>
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+            <TextBlock Text="Từ của tôi" FontSize="19" FontWeight="Bold" Foreground="{StaticResource Ink}"/>
+            <TextBlock Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0"
+                       Text="Gặp từ hay khi đọc báo, xem phim, làm việc? Copy nó (Ctrl+C) rồi nhấn Ctrl+Alt+V ở bất kỳ đâu. App kiểm tra xem thư viện đã có từ đó chưa, chưa có mới thêm vào đây. Sau đó nhờ AI điền nghĩa cho cả danh sách một lần."/>
+            <TextBlock x:Name="HotkeyWarning" Foreground="#B54708" TextWrapping="Wrap" Margin="0,6,0,0" Visibility="Collapsed"
+                       Text="Phím tắt Ctrl+Alt+V đang bị chương trình khác dùng nên chưa bật được. Vẫn có thể gõ từ vào ô bên dưới để thêm."/>
+        </StackPanel>
+        <TextBlock DockPanel.Dock="Bottom" x:Name="StatusText" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="4,10,0,0"/>
+        <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="300"/><ColumnDefinition Width="14"/><ColumnDefinition/></Grid.ColumnDefinitions>
+            <Border Style="{StaticResource Panel}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" x:Name="WaitingTitle" Style="{StaticResource Step}"/>
+                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                        <Button DockPanel.Dock="Right" Content="Thêm" Click="Add_Click" Padding="10,5"/>
+                        <TextBox x:Name="AddBox" Padding="5" Margin="0,3,4,3" ToolTip="Gõ một từ hoặc cụm từ rồi Enter" KeyDown="AddBox_KeyDown"/>
+                    </DockPanel>
+                    <Button DockPanel.Dock="Bottom" Content="Xóa từ đã chọn" Click="Remove_Click" HorizontalAlignment="Left" Margin="-3,8,0,0"/>
+                    <ListBox x:Name="WaitingList" BorderThickness="0" HorizontalContentAlignment="Stretch" SelectionMode="Extended"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <DockPanel Margin="2,3">
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding Added}" FontSize="11" Foreground="#667085" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Text}" FontWeight="SemiBold" Foreground="#172033" TextTrimming="CharacterEllipsis"/>
+                                </DockPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+            <Border Grid.Column="2" Style="{StaticResource Panel}">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top">
+                        <TextBlock Style="{StaticResource Step}" Text="1 · Sao chép prompt, dán vào AI"/>
+                        <WrapPanel Margin="-3,0,0,10">
+                            <Button x:Name="CopyPromptButton" Content="Sao chép prompt" Click="CopyPrompt_Click" Background="{StaticResource Accent}" Foreground="White" FontWeight="SemiBold"/>
+                            <Button Content="Claude" Tag="https://claude.ai/new" Click="OpenAi_Click"/>
+                            <Button Content="ChatGPT" Tag="https://chatgpt.com/" Click="OpenAi_Click"/>
+                            <Button Content="Gemini" Tag="https://gemini.google.com/app" Click="OpenAi_Click"/>
+                        </WrapPanel>
+                        <TextBlock Style="{StaticResource Step}" Text="2 · Dán câu trả lời của AI rồi nhập"/>
+                    </StackPanel>
+                    <StackPanel DockPanel.Dock="Bottom">
+                        <WrapPanel Margin="-3,8,0,0">
+                            <Button x:Name="ImportButton" Content="Nhập vào “Từ của tôi”" Click="Import_Click" Background="{StaticResource Accent}" Foreground="White" FontWeight="SemiBold"/>
+                            <Button x:Name="PracticeButton" Content="▶ Học ngay" Click="Practice_Click" Visibility="Collapsed"
+                                    ToolTip="Lật thẻ rồi trắc nghiệm các từ vừa nhập; sau đó chúng vào lịch ôn tập"/>
+                        </WrapPanel>
+                        <TextBlock x:Name="ImportResult" TextWrapping="Wrap" Margin="2,6,0,0" Foreground="{StaticResource Ink}"/>
+                        <TextBlock Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="2,8,0,0"
+                                   Text="Từ đã nhập nằm trong lộ trình “Từ của tôi” (ngoài khóa học, mỗi lần nhập là một ngày): xem/sửa ở Sửa lộ trình, kiểm tra bằng 📝, thêm vào khóa học ở tab Khóa học."/>
+                    </StackPanel>
+                    <TextBox x:Name="AnswerBox" AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap" FontFamily="Consolas" Padding="6"
+                             VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" MinHeight="140"/>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</UserControl>

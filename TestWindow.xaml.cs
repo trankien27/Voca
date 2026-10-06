@@ -358,7 +358,7 @@ public partial class TestWindow : Window
     }
 
     private void OfferPractice_Click(object sender, RoutedEventArgs e) =>
-        _actions.Practice(WrongWords(), $"Học lại từ sai · {_scope.Replace(" · câu sai", "")}");
+        _actions.Practice(WrongWords(), $"Học lại từ sai · {_scope.Replace(" · câu sai", "")}", SessionMode.Practice);
 
     private void OfferOpenList_Click(object sender, RoutedEventArgs e) => _actions.OpenMistakes();
 

@@ -123,8 +123,10 @@ public static class MistakeDays
         {
             ReviewScheduler.Rate(data, word, correct, now);
             if (correct) word.CorrectCount++;
+            word.IntroducedOn ??= now.Date;
         }
-        Record(data, answers.Where(a => !a.Correct).Select(a => a.Word), now);
+        // Words already in a list are counted again; new ones (e.g. "Từ của tôi") join today's session list.
+        Record(data, answers.Where(a => !a.Correct).Select(a => a.Word), now, SessionTitle(now), onlyUnlisted: true);
         Resolve(data, answers);
     }
 
@@ -133,11 +135,11 @@ public static class MistakeDays
         data.MistakeDay is { Done: false } day && day.Date.Date > today.Date ? day : null;
 
     /// <summary>
-    /// The mistake day that is today's lesson: scheduled for today or a missed earlier date, or finished
-    /// today (its words stay on the taskbar until tomorrow).
+    /// The mistake day that is today's lesson: scheduled for today (finished or not — its words stay on the
+    /// taskbar until tomorrow). A mistake day lasts only its own date, so a missed one never holds up the course.
     /// </summary>
     public static MistakeDay? Active(AppData data, DateTime today) =>
-        data.MistakeDay is { } day && day.Date.Date <= today.Date && (!day.Done || day.DoneOn?.Date == today.Date) ? day : null;
+        data.MistakeDay is { } day && day.Date.Date == today.Date ? day : null;
 
     public static List<Word> WordsOf(AppData data, MistakeDay day)
     {
@@ -185,12 +187,23 @@ public static class MistakeDays
         return true;
     }
 
-    /// <summary>Forgets a mistake day finished before today. Returns true when something changed.</summary>
+    /// <summary>
+    /// Forgets a mistake day whose date has passed, studied or not (its words stay in the mistake lists).
+    /// Returns true when something changed.
+    /// </summary>
     public static bool Cleanup(AppData data, DateTime today)
     {
-        if (data.MistakeDay is not { Done: true } day || day.DoneOn?.Date >= today.Date) return false;
+        if (data.MistakeDay is not { } day || day.Date.Date >= today.Date) return false;
         data.MistakeDay = null;
         return true;
+    }
+
+    /// <summary>The word stops counting as wrong and leaves every list (e.g. marked "Đã thuộc").</summary>
+    public static void Forget(AppData data, Guid wordId)
+    {
+        data.Mistakes.RemoveAll(m => m.WordId == wordId);
+        foreach (var list in data.MistakeLists) list.WordIds.Remove(wordId);
+        data.MistakeLists.RemoveAll(l => l.WordIds.Count == 0);
     }
 
     /// <summary>Words answered right (and not also wrong) stop counting and leave every list.</summary>

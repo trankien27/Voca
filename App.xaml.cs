@@ -31,6 +31,8 @@ public partial class App : System.Windows.Application
         }
         // After an update (or a fresh start): remove the previous exe and leftover downloads.
         if (Services.Updater.Enabled()) Services.Updater.CleanUp();
+        try { Services.WindowsStartupService.FollowCurrentExe(); }
+        catch (Exception) { /* start-up entry not writable: the setting in Cài đặt still works */ }
         _window = new MainWindow(store);
         _window.Show();
     }

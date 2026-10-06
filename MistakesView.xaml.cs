@@ -93,7 +93,7 @@ public partial class MistakesView : System.Windows.Controls.UserControl
     private void Practice_Click(object sender, RoutedEventArgs e)
     {
         if (Selected is not { } row) return;
-        _actions.Practice(row.Words, $"Học lại từ sai · {row.Title}");
+        _actions.Practice(row.Words, $"Học lại từ sai · {row.Title}", SessionMode.Practice);
     }
 
     private void Tomorrow_Click(object sender, RoutedEventArgs e)

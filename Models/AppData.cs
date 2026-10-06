@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Voca.Models;
@@ -5,6 +6,9 @@ namespace Voca.Models;
 /// <summary>Everything Voca stores, in one JSON file. Only <see cref="Services.Store"/> reads or writes it.</summary>
 public sealed class AppData
 {
+    /// <summary>Fields written by a newer Voca; kept as they are so going back a version loses nothing.</summary>
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
+
     public int DataVersion { get; set; } = 1;
     public Settings Settings { get; set; } = new();
     /// <summary>All plans, in or out of the course.</summary>
@@ -22,12 +26,17 @@ public sealed class AppData
     public List<MistakeEntry> Mistakes { get; set; } = [];
     /// <summary>Wrong words grouped by where they came from (one list per test, one per day of sessions).</summary>
     public List<MistakeList> MistakeLists { get; set; } = [];
+    /// <summary>"Từ của tôi": words added with Ctrl+Alt+V that still need meanings.</summary>
+    public List<InboxWord> Inbox { get; set; } = [];
     /// <summary>The scheduled mistake day, if any; on that day it replaces the course lesson.</summary>
     public MistakeDay? MistakeDay { get; set; }
 }
 
 public sealed class Settings
 {
+    /// <summary>Fields written by a newer Voca; kept as they are so going back a version loses nothing.</summary>
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
+
     public int RotationSeconds { get; set; } = 20;
     /// <summary>"word", "flash" (word, then meaning) or "reverse" (meaning, then word).</summary>
     public string DisplayMode { get; set; } = DisplayModes.Word;
@@ -41,6 +50,15 @@ public sealed class Settings
     public double? PillTop { get; set; }
     /// <summary>The version that last ran, to say "updated to …" once after an update.</summary>
     public string LastVersion { get; set; } = "";
+    /// <summary>Look for a newer release once a day and say so (never downloads by itself).</summary>
+    public bool CheckUpdatesDaily { get; set; } = true;
+    public DateTime? LastUpdateCheck { get; set; }
+    /// <summary>Newest release seen on GitHub, shown until installed.</summary>
+    public string AvailableVersion { get; set; } = "";
+    /// <summary>Release already announced in the tray, so each version is announced once.</summary>
+    public string NotifiedVersion { get; set; } = "";
+    /// <summary>Sessions also ask to type the word and to fill the gap in an example sentence.</summary>
+    public bool QuizTyping { get; set; } = true;
     /// <summary>Show the how-to guide at the top of "Tạo chủ đề mới".</summary>
     public bool ShowCreateGuide { get; set; } = true;
     /// <summary>How the word on the taskbar looks.</summary>
@@ -50,6 +68,9 @@ public sealed class Settings
 /// <summary>Look of the taskbar word. Colours are "#RRGGBB"; an invalid value falls back to the default.</summary>
 public sealed class PillStyle
 {
+    /// <summary>Fields written by a newer Voca; kept as they are so going back a version loses nothing.</summary>
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
+
     public const double MinFontSize = 10, MaxFontSize = 32, NarrowestWidth = 160, WidestWidth = 700;
 
     public string FontFamily { get; set; } = "Segoe UI";
@@ -82,6 +103,9 @@ public static class DisplayModes
 /// <summary>A learning plan: words grouped into Day 1..N, each day optionally titled.</summary>
 public sealed class Plan
 {
+    /// <summary>Fields written by a newer Voca; kept as they are so going back a version loses nothing.</summary>
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
+
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "";
     public string Level { get; set; } = "";
@@ -97,6 +121,9 @@ public sealed class Plan
 
 public sealed class Word
 {
+    /// <summary>Fields written by a newer Voca; kept as they are so going back a version loses nothing.</summary>
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
+
     public Guid Id { get; set; } = Guid.NewGuid();
     public int Day { get; set; } = 1;
     public string Text { get; set; } = "";
@@ -112,10 +139,26 @@ public sealed class Word
     public ReviewState? ReviewBeforeToday { get; set; }
     public int ForgotCount { get; set; }
     public int CorrectCount { get; set; }
+    /// <summary>Marked "Đã thuộc": no longer shown on the taskbar, in sessions or in reviews.</summary>
+    public bool Learned { get; set; }
+    public DateTime? LearnedOn { get; set; }
+}
+
+/// <summary>A word added with Ctrl+Alt+V, waiting for its meaning (filled in by an AI prompt).</summary>
+public sealed class InboxWord
+{
+    /// <summary>Fields written by a newer Voca; kept as they are so going back a version loses nothing.</summary>
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
+
+    public string Text { get; set; } = "";
+    public DateTime AddedAt { get; set; }
 }
 
 public sealed class ReviewState
 {
+    /// <summary>Fields written by a newer Voca; kept as they are so going back a version loses nothing.</summary>
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
+
     public int Reps { get; set; }
     public int Lapses { get; set; }
     public double Ease { get; set; } = 2.5;
@@ -130,11 +173,18 @@ public sealed class ReviewState
 /// <summary>Where the learner is in the course.</summary>
 public sealed class CourseState
 {
+    /// <summary>Fields written by a newer Voca; kept as they are so going back a version loses nothing.</summary>
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
+
     public Guid? PlanId { get; set; }
     public int Day { get; set; } = 1;
-    /// <summary>Today's session was finished; the next calendar day moves on to the next day.</summary>
+    /// <summary>Today's session was finished (shown as "Đã học xong hôm nay").</summary>
     public bool DayCompleted { get; set; }
     public DateTime? DayCompletedOn { get; set; }
+    /// <summary>Calendar date the current day became current; the next calendar date moves on.</summary>
+    public DateTime? DayStartedOn { get; set; }
+    /// <summary>Last date a mistake day replaced the lesson (the course day keeps its turn).</summary>
+    public DateTime? PausedOn { get; set; }
     /// <summary>A plan just finished whose summary has not been shown yet.</summary>
     public Guid? PendingSummaryPlanId { get; set; }
     public bool Finished { get; set; }
@@ -143,6 +193,9 @@ public sealed class CourseState
 /// <summary>A word answered wrong, and how often, until it is answered right on a mistake day.</summary>
 public sealed class MistakeEntry
 {
+    /// <summary>Fields written by a newer Voca; kept as they are so going back a version loses nothing.</summary>
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
+
     public Guid WordId { get; set; }
     public int Times { get; set; }
     public DateTime LastWrong { get; set; }
@@ -151,6 +204,9 @@ public sealed class MistakeEntry
 /// <summary>The words answered wrong in one test (or in one day's sessions).</summary>
 public sealed class MistakeList
 {
+    /// <summary>Fields written by a newer Voca; kept as they are so going back a version loses nothing.</summary>
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
+
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Title { get; set; } = "";
     public DateTime CreatedAt { get; set; }
@@ -160,6 +216,9 @@ public sealed class MistakeList
 /// <summary>A day of studying wrong words, taken on <see cref="Date"/> (or the first day after, if missed).</summary>
 public sealed class MistakeDay
 {
+    /// <summary>Fields written by a newer Voca; kept as they are so going back a version loses nothing.</summary>
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
+
     public DateTime Date { get; set; }
     public List<Guid> WordIds { get; set; } = [];
     public bool Done { get; set; }
@@ -168,6 +227,9 @@ public sealed class MistakeDay
 
 public sealed class DayLog
 {
+    /// <summary>Fields written by a newer Voca; kept as they are so going back a version loses nothing.</summary>
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
+
     public int Known { get; set; }
     public int Forgot { get; set; }
     public bool SessionDone { get; set; }

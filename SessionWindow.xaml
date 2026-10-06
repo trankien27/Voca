@@ -58,6 +58,11 @@
                 <TextBlock x:Name="QuizQuestionLabel" Foreground="{StaticResource Muted}" FontSize="13"/>
                 <TextBlock x:Name="QuizPrompt" FontSize="26" FontWeight="Bold" Foreground="{StaticResource Ink}" TextWrapping="Wrap" Margin="0,4,0,14"/>
                 <UniformGrid x:Name="QuizOptions" Columns="2"/>
+                <DockPanel x:Name="TypePanel" Visibility="Collapsed" Margin="5,0">
+                    <Button DockPanel.Dock="Right" x:Name="TypeCheckButton" Content="Kiểm tra" Click="TypeCheck_Click"
+                            Background="{StaticResource Accent}" Foreground="White" FontWeight="SemiBold" Padding="18,8"/>
+                    <TextBox x:Name="TypeBox" FontSize="18" Padding="8,6" Margin="0,3,6,3"/>
+                </DockPanel>
                 <TextBlock x:Name="QuizFeedback" FontSize="14" TextWrapping="Wrap" Margin="5,12,5,0" MinHeight="40"/>
             </StackPanel>
         </Grid>
@@ -69,6 +74,13 @@
                 <TextBlock Text="KẾT QUẢ HÔM NAY" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Accent}"/>
                 <TextBlock x:Name="ResultScore" FontFamily="Georgia" FontSize="44" Foreground="{StaticResource Ink}"/>
                 <TextBlock x:Name="ResultNote" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,2,0,10"/>
+                <Border x:Name="NextStepsPanel" Background="#F0EEFF" CornerRadius="10" Padding="12,8" Margin="0,0,0,10" Visibility="Collapsed">
+                    <DockPanel>
+                        <WrapPanel x:Name="NextStepsButtons" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+                        <TextBlock Text="Hết từ của ngày này. Học tiếp luôn hay kiểm tra lại?" FontWeight="SemiBold"
+                                   Foreground="{StaticResource Ink}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    </DockPanel>
+                </Border>
             </StackPanel>
             <ListBox x:Name="ResultList" Grid.Row="1" BorderBrush="#E6E3F5" Background="White" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBox.ItemTemplate>

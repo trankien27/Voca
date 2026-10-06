@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Speech.Synthesis;
@@ -31,6 +32,12 @@ public partial class MainWindow : Window
     private LibraryWindow? _libraryWindow;
     private StatsWindow? _statsWindow;
     private SessionWindow? _sessionWindow;
+    private readonly DispatcherTimer _updateTimer = new();
+    private ToolStripItem? _updatesMenuItem;
+    /// <summary>The word just marked "Đã thuộc", for "Hoàn tác".</summary>
+    private Word? _undoWord;
+    private bool _hotkeyReady;
+    private QuickAddWindow? _quickAddWindow;
     /// <summary>What clicking the last tray balloon does (start the session, or install an update).</summary>
     private Action _balloonAction;
     private System.Windows.Point _dragStart;
@@ -54,11 +61,12 @@ public partial class MainWindow : Window
         _topmostTimer.Tick += (_, _) => { RefreshForNewDay(); UpdateVisibilityForFullScreen(); KeepAboveTaskbar(); MaybeNotify(); };
         // Any change saved by any window (library, session, stats) refreshes the taskbar word.
         _store.Changed += () => Dispatcher.Invoke(Reload);
-        Loaded += (_, _) => { Reload(); RestoreOrSetDefaultPosition(); KeepAboveTaskbar(); _topmostTimer.Start(); SayIfUpdated(); };
+        Loaded += (_, _) => { Reload(); RestoreOrSetDefaultPosition(); KeepAboveTaskbar(); _topmostTimer.Start(); SayIfUpdated(); StartUpdateCheck(); };
         // Pause rotation while the detail popup is open so the word being read stays put.
         DetailPopup.Opened += (_, _) => _timer.Stop();
-        DetailPopup.Closed += (_, _) => _timer.Start();
-        Closed += (_, _) => { _topmostTimer.Stop(); _tray.Dispose(); _speaker.Dispose(); };
+        DetailPopup.Closed += (_, _) => { _timer.Start(); UndoPanel.Visibility = Visibility.Collapsed; _undoWord = null; };
+        SourceInitialized += (_, _) => RegisterQuickAddHotkey();
+        Closed += (_, _) => { _topmostTimer.Stop(); _updateTimer.Stop(); UnregisterQuickAddHotkey(); _tray.Dispose(); _speaker.Dispose(); };
     }
 
     private readonly bool _hasEnglishVoice;
@@ -90,7 +98,8 @@ public partial class MainWindow : Window
         menu.Items.Add("Bắt đầu phiên học", null, (_, _) => Dispatcher.Invoke(OpenSession));
         menu.Items.Add("Tạo bài kiểm tra", null, (_, _) => Dispatcher.Invoke(OpenTest));
         menu.Items.Add("Danh sách từ sai", null, (_, _) => Dispatcher.Invoke(OpenMistakes));
-        menu.Items.Add("Cập nhật phiên bản…", null, (_, _) => Dispatcher.Invoke(OpenUpdates));
+        menu.Items.Add("Từ của tôi (Ctrl+Alt+V)", null, (_, _) => Dispatcher.Invoke(OpenMyWords));
+        _updatesMenuItem = menu.Items.Add("Cập nhật phiên bản…", null, (_, _) => Dispatcher.Invoke(OpenUpdates));
         menu.Items.Add("Thư viện và cài đặt", null, (_, _) => Dispatcher.Invoke(OpenLibrary));
         menu.Items.Add("Thống kê học tập", null, (_, _) => Dispatcher.Invoke(OpenStats));
         menu.Items.Add("Thoát", null, (_, _) => Dispatcher.Invoke(() => { _tray.Visible = false; Close(); System.Windows.Application.Current.Shutdown(); }));
@@ -107,7 +116,8 @@ public partial class MainWindow : Window
             var moved = CourseEngine.Advance(_data, today);
             var cleaned = MistakeDays.Cleanup(_data, today);
             var tidied = MistakeDays.Tidy(_data, DateTime.Now);
-            if (moved || cleaned || tidied) _store.Save();
+            var allLearned = CourseEngine.CompleteIfAllLearned(_data, today);
+            if (moved || cleaned || tidied || allLearned) _store.Save();
             var dateChanged = _loadedDate != today;
             var currentId = !dateChanged && _index < _today.Count ? _today[_index].Id : (Guid?)null;
             var list = CourseEngine.BuildToday(_data, today, out _fresh);
@@ -202,6 +212,8 @@ public partial class MainWindow : Window
             return ("Thêm chủ đề ⚙", "Khóa học đang trống", "Mở Thư viện (⚙) để tạo chủ đề mới hoặc thêm lộ trình vào khóa học.");
         if (_data.Position.Finished)
             return ("Hoàn thành 🎉", "Đã học hết khóa học", "Mở Thư viện (⚙) để tạo chủ đề mới. Từ cũ vẫn được ôn khi đến hạn.");
+        if (_data.Position.DayCompleted)
+            return ("Xong hôm nay ✓", "Đã học xong hôm nay", "Mai sang ngày tiếp theo. Từ cũ vẫn được ôn khi đến hạn.");
         return ("Nghỉ hôm nay", $"Ngày {_data.Position.Day} trống", "Ngày này chưa có từ. Thêm từ trong Thư viện.");
     }
 
@@ -258,6 +270,7 @@ public partial class MainWindow : Window
             WordText.Text = empty.Pill;
             PillPainter.Apply(_data.Settings.Pill, WordPill, WordText, showBack: false);
             WordPill.ToolTip = null;
+            QuickRatePanel.Visibility = Visibility.Collapsed;
             DetailWord.Text = empty.Title;
             KindBadge.Visibility = Visibility.Collapsed;
             PhoneticText.Text = "";
@@ -269,6 +282,7 @@ public partial class MainWindow : Window
             return;
         }
         var item = _today[_index];
+        QuickRatePanel.Visibility = Visibility.Visible;
         RenderPill();
         if (IsFlashcardMode) _revealTimer.Start();
 
@@ -337,11 +351,52 @@ public partial class MainWindow : Window
             : $"Hôm nay: {_fresh.Count} từ mới · {reviews} từ cần ôn";
         CourseStatusText.Text = title.Length > 0 && !position.Finished ? $"{title}\n{status}" : status;
         SessionButton.Content = position.DayCompleted || position.Finished ? "Học lại / ôn tập" : "Bắt đầu phiên học";
+        RenderNextChoice(plan);
     }
 
     /// <summary>Today is a mistake day: the course panel shows it instead of the course day.</summary>
+    /// <summary>Today's words are done: ask whether to go on to the next day now or take a test.</summary>
+    private void RenderNextChoice(Plan plan)
+    {
+        var position = _data.Position;
+        var next = position.DayCompleted && !position.Finished ? CourseEngine.NextDay(_data) : null;
+        NextChoicePanel.Visibility = next is null ? Visibility.Collapsed : Visibility.Visible;
+        // With the two choices shown, "Học lại / ôn tập" steps back to a quiet button.
+        SessionButton.Background = next is null ? (System.Windows.Media.Brush)FindResource("Accent") : SessionQuietBrush;
+        SessionButton.Foreground = next is null ? System.Windows.Media.Brushes.White : SessionQuietInk;
+        if (next is not var (nextPlan, nextDay)) return;
+        NextChoiceText.Text = $"Đã xong Ngày {position.Day} 🎉 Học tiếp luôn hay kiểm tra lại?";
+        StudyNextButton.Content = NextLabel(plan, nextPlan, nextDay);
+        TestDoneDaysButton.Content = position.Day > 1 ? $"📝 Kiểm tra ngày 1–{position.Day}" : "📝 Kiểm tra Ngày 1";
+    }
+
+    private static readonly System.Windows.Media.Brush SessionQuietBrush = Frozen(0xF0, 0xEE, 0xFF), SessionQuietInk = Frozen(0x4B, 0x3C, 0xC4);
+
+    private static string NextLabel(Plan current, Plan nextPlan, int nextDay) =>
+        nextPlan == current ? $"▶ Học tiếp Ngày {nextDay}" : "▶ Sang lộ trình tiếp";
+
+    /// <summary>"Học tiếp": moves to the next day now and opens its session.</summary>
+    private void StudyNextNow()
+    {
+        var moved = false;
+        _store.Update(d => moved = CourseEngine.StudyNextDayNow(d, DateTime.Today));
+        if (moved) OpenSession();
+    }
+
+    /// <summary>A test over the days of the current plan studied so far.</summary>
+    private void TestDoneDays()
+    {
+        DetailPopup.IsOpen = false;
+        if (CourseEngine.Current(_data) is not var (plan, _)) return;
+        new TestWindow(_store, plan.Id, 1, _data.Position.Day, Actions).Show();
+    }
+
+    private void StudyNext_Click(object sender, RoutedEventArgs e) => StudyNextNow();
+    private void TestDoneDays_Click(object sender, RoutedEventArgs e) => TestDoneDays();
+
     private void RenderMistakeDay(MistakeDay day)
     {
+        NextChoicePanel.Visibility = Visibility.Collapsed;
         CoursePanel.Visibility = Visibility.Visible;
         WeekDots.Visibility = Visibility.Collapsed;
         CourseEyebrow.Text = $"NGÀY HỌC TỪ SAI · {_fresh.Count} TỪ";
@@ -442,8 +497,13 @@ public partial class MainWindow : Window
         var mistakeDay = MistakeDays.Active(_data, DateTime.Today) is not null && fresh.Count > 0;
         var courseText = mistakeDay ? $"Ngày học từ sai · {fresh.Count} từ"
             : CourseEngine.Current(_data) is var (plan, _) ? $"{plan.Name} · Ngày {_data.Position.Day}/{plan.DayCount}" : "";
+        // After a course session: offer to go on to the next day right away, or to take a test.
+        IReadOnlyList<(string, Action)>? nextSteps = null;
+        if (!mistakeDay && CourseEngine.Current(_data) is var (current, _) && CourseEngine.NextDay(_data) is var (nextPlan, nextDay))
+            nextSteps = [(NextLabel(current, nextPlan, nextDay), StudyNextNow),
+                         (_data.Position.Day > 1 ? $"📝 Kiểm tra ngày 1–{_data.Position.Day}" : "📝 Kiểm tra Ngày 1", TestDoneDays)];
         _sessionWindow = new SessionWindow(_data, fresh, reviews, courseText, FinishSession, Speak,
-            mistakeDay ? SessionMode.MistakeDay : SessionMode.Course);
+            mistakeDay ? SessionMode.MistakeDay : SessionMode.Course, nextSteps);
         _sessionWindow.Closed += (_, _) => _sessionWindow = null;
         _sessionWindow.Show();
         _sessionWindow.Activate();
@@ -750,7 +810,162 @@ public partial class MainWindow : Window
         new TestWindow(_store, null, null, null, Actions).Show();
     }
 
-    private AppActions Actions => new(Speak, _hasEnglishVoice, OpenStats, OpenMistakes, OpenPractice);
+    private AppActions Actions => new(Speak, _hasEnglishVoice, OpenStats, OpenMistakes, OpenPractice, () => _hotkeyReady);
+
+    // ---------------------------------- quick rating ----------------------------------
+
+    private void Learned_Click(object sender, RoutedEventArgs e)
+    {
+        if (_today.Count == 0) return;
+        var word = _today[_index];
+        _undoWord = word;
+        _store.Update(d => CourseEngine.MarkLearned(d, word, DateTime.Now));
+        UndoText.Text = $"Đã đánh dấu thuộc “{word.Text}” — từ này sẽ không hiện nữa.";
+        UndoButton.Visibility = Visibility.Visible;
+        UndoPanel.Visibility = Visibility.Visible;
+    }
+
+    private void NotRemembered_Click(object sender, RoutedEventArgs e)
+    {
+        if (_today.Count == 0) return;
+        var word = _today[_index];
+        _undoWord = null;
+        _store.Update(d => CourseEngine.MarkNotRemembered(d, word, DateTime.Now));
+        UndoText.Text = $"Đã ghi “{word.Text}” là chưa nhớ — hiện trước hôm nay và ôn lại ngày mai.";
+        UndoButton.Visibility = Visibility.Collapsed;
+        UndoPanel.Visibility = Visibility.Visible;
+    }
+
+    private void Undo_Click(object sender, RoutedEventArgs e)
+    {
+        if (_undoWord is not { } word) return;
+        _undoWord = null;
+        _store.Update(_ => CourseEngine.UnmarkLearned(word));
+        UndoText.Text = $"Đã hoàn tác: “{word.Text}” sẽ hiện lại.";
+        UndoButton.Visibility = Visibility.Collapsed;
+    }
+
+    // ---------------------------------- Ctrl+Alt+V ----------------------------------
+
+    private const int QuickAddHotkeyId = 0x5643;
+    private const int WmHotkey = 0x0312;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint modifiers, uint key);
+
+    [DllImport("user32.dll")]
+    private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+    private void RegisterQuickAddHotkey()
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        HwndSource.FromHwnd(handle)?.AddHook(QuickAddHook);
+        const uint alt = 0x1, control = 0x2, noRepeat = 0x4000, keyV = 0x56;
+        _hotkeyReady = RegisterHotKey(handle, QuickAddHotkeyId, control | alt | noRepeat, keyV);
+    }
+
+    private void UnregisterQuickAddHotkey()
+    {
+        if (_hotkeyReady) UnregisterHotKey(new WindowInteropHelper(this).Handle, QuickAddHotkeyId);
+    }
+
+    private IntPtr QuickAddHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WmHotkey && wParam.ToInt32() == QuickAddHotkeyId)
+        {
+            handled = true;
+            Dispatcher.BeginInvoke(QuickAddFromSelection);
+        }
+        return IntPtr.Zero;
+    }
+
+    /// <summary>
+    /// Ctrl+Alt+V: takes the text selected in the app in front and opens the add-word window next to the
+    /// mouse (the library is checked there). Nothing selected → the window opens empty to type a word.
+    /// </summary>
+    private async void QuickAddFromSelection()
+    {
+        var (outcome, text) = await SelectionGrabber.GrabAsync();
+        if (outcome == SelectionGrabber.Outcome.Console) text = SelectionGrabber.TryGetText();   // consoles: use what was copied
+        var raw = text is null ? null : Regex.Replace(text, @"\s+", " ").Trim();
+        var word = QuickAdd.Normalize(raw);
+        var note = outcome == SelectionGrabber.Outcome.NothingSelected
+            ? "Không thấy chữ nào đang được bôi đen — gõ từ vào ô trên."
+            : word is null && raw is { Length: > 0 }
+                ? "Đoạn đang chọn không phải một từ hay cụm từ ngắn (tối đa 6 từ, không có chữ số) — sửa lại ở ô trên."
+                : null;
+        if (_quickAddWindow is null)
+        {
+            _quickAddWindow = new QuickAddWindow(_store, Speak, message =>
+            {
+                _balloonAction = OpenMyWords;
+                _tray.ShowBalloonTip(5000, "Voca · Từ của tôi", message, ToolTipIcon.Info);
+            });
+            _quickAddWindow.Closed += (_, _) => _quickAddWindow = null;
+        }
+        _quickAddWindow.Load(word ?? (raw is { Length: > 0 and <= 80 } ? raw : null), note);
+        var cursor = System.Windows.Forms.Cursor.Position;
+        var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
+        _quickAddWindow.Show();
+        _quickAddWindow.PlaceNear(new System.Windows.Point(cursor.X / dpi.DpiScaleX, cursor.Y / dpi.DpiScaleY));
+        _quickAddWindow.Activate();
+    }
+
+    private void OpenMyWords()
+    {
+        OpenLibrary();
+        _libraryWindow?.ShowMyWords();
+    }
+
+    // ---------------------------------- new version notice ----------------------------------
+
+    /// <summary>Once a day (if enabled) asks GitHub for the newest release; never downloads.</summary>
+    private void StartUpdateCheck()
+    {
+        RenderUpdateLink();
+        if (!Updater.Enabled()) return;
+        _updateTimer.Interval = TimeSpan.FromMinutes(2);
+        _updateTimer.Tick += async (_, _) =>
+        {
+            _updateTimer.Interval = TimeSpan.FromHours(1);
+            await CheckForNewVersionAsync();
+        };
+        _updateTimer.Start();
+    }
+
+    private async Task CheckForNewVersionAsync()
+    {
+        var settings = _data.Settings;
+        if (!settings.CheckUpdatesDaily || settings.LastUpdateCheck?.Date == DateTime.Today) return;
+        List<UpdateInfo> releases;
+        try { releases = await Updater.ListAsync(Updater.Http); }
+        catch (Exception) { return; }   // offline or GitHub unreachable: try again in an hour
+        var newest = releases.FirstOrDefault()?.Version;
+        var available = newest is not null && Updater.IsNewer(newest, Updater.Current) ? newest.ToString(3) : "";
+        var announce = available.Length > 0 && settings.NotifiedVersion != available;
+        _store.Update(d =>
+        {
+            d.Settings.LastUpdateCheck = DateTime.Now;
+            d.Settings.AvailableVersion = available;
+            if (announce) d.Settings.NotifiedVersion = available;
+        });
+        RenderUpdateLink();
+        if (!announce) return;
+        _balloonAction = OpenUpdates;
+        _tray.ShowBalloonTip(10000, $"Có Voca {available}", "Bấm để xem thay đổi và cập nhật (chỉ cài khi bạn bấm Cập nhật).", ToolTipIcon.Info);
+    }
+
+    /// <summary>Shows "Có Voca X" on the popup and in the tray menu while a newer release is known.</summary>
+    private void RenderUpdateLink()
+    {
+        var known = Version.TryParse(_data.Settings.AvailableVersion, out var available) && Updater.IsNewer(available, Updater.Current);
+        UpdateLink.Visibility = known ? Visibility.Visible : Visibility.Collapsed;
+        UpdateLink.Content = known ? $"⬆ Có Voca {available!.ToString(3)} · Xem và cập nhật" : "";
+        if (_updatesMenuItem is not null)
+            _updatesMenuItem.Text = known ? $"⬆ Có Voca {available!.ToString(3)} — cập nhật…" : "Cập nhật phiên bản…";
+    }
+
+    private void UpdateLink_Click(object sender, RoutedEventArgs e) => OpenUpdates();
 
     // ---------------------------------- updates ----------------------------------
 
@@ -787,7 +1002,7 @@ public partial class MainWindow : Window
     /// A session over wrong words outside the course (flash cards, then the quiz). Right answers leave
     /// the mistake lists; the course day is not affected.
     /// </summary>
-    private void OpenPractice(IReadOnlyList<Word> words, string title)
+    private void OpenPractice(IReadOnlyList<Word> words, string title, SessionMode mode)
     {
         DetailPopup.IsOpen = false;
         if (words.Count == 0) return;
@@ -797,7 +1012,7 @@ public partial class MainWindow : Window
             return;
         }
         _sessionWindow = new SessionWindow(_data, words, [], title,
-            (answers, _) => _store.Update(d => MistakeDays.ApplyPractice(d, answers, DateTime.Now)), Speak, SessionMode.Practice);
+            (answers, _) => _store.Update(d => MistakeDays.ApplyPractice(d, answers, DateTime.Now)), Speak, mode);
         _sessionWindow.Closed += (_, _) => _sessionWindow = null;
         _sessionWindow.Show();
         _sessionWindow.Activate();

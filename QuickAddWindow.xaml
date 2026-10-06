@@ -1,0 +1,62 @@
+<Window x:Class="Voca.QuickAddWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Voca · Thêm từ" Width="400" SizeToContent="Height" ResizeMode="NoResize" Topmost="True"
+        ShowInTaskbar="False" WindowStartupLocation="Manual" Background="#F7F7FB" PreviewKeyDown="Window_PreviewKeyDown">
+    <Window.Resources>
+        <Style x:Key="Label" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource Muted}"/><Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="0,8,0,2"/>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Padding" Value="6,4"/><Setter Property="FontSize" Value="14"/>
+        </Style>
+    </Window.Resources>
+    <StackPanel Margin="16,14,16,14">
+        <TextBlock Text="Thêm vào “Từ của tôi”" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Accent}"/>
+        <DockPanel Margin="0,4,0,0">
+            <Button DockPanel.Dock="Right" Content="🔊" Click="Speak_Click" ToolTip="Nghe phát âm" Padding="10,4" Margin="6,0,0,0"/>
+            <TextBox x:Name="WordBox" FontSize="20" FontWeight="SemiBold" TextChanged="WordBox_TextChanged"/>
+        </DockPanel>
+        <TextBlock x:Name="NoteText" FontSize="12" Foreground="#B54708" TextWrapping="Wrap" Margin="2,4,0,0" Visibility="Collapsed"/>
+
+        <Border x:Name="ExistingPanel" Background="#FFF6ED" CornerRadius="8" Padding="10,8" Margin="0,10,0,0" Visibility="Collapsed">
+            <StackPanel>
+                <TextBlock x:Name="ExistingText" FontWeight="SemiBold" Foreground="#93370D" TextWrapping="Wrap"/>
+                <TextBlock x:Name="ExistingDetail" Foreground="{StaticResource Ink}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <StackPanel x:Name="FieldsPanel">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="10"/><ColumnDefinition Width="110"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource Label}" Text="Phiên âm"/>
+                    <TextBox x:Name="PhoneticBox" ToolTip="Ví dụ: /ˌserənˈdɪpəti/ (dấu / tự thêm)"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock Style="{StaticResource Label}" Text="Loại từ"/>
+                    <ComboBox x:Name="PosBox" IsEditable="True" Padding="6,4" FontSize="14">
+                        <ComboBoxItem Content="n"/><ComboBoxItem Content="v"/><ComboBoxItem Content="adj"/><ComboBoxItem Content="adv"/>
+                        <ComboBoxItem Content="phr v"/><ComboBoxItem Content="phr"/><ComboBoxItem Content="prep"/><ComboBoxItem Content="conj"/>
+                    </ComboBox>
+                </StackPanel>
+            </Grid>
+            <TextBlock Style="{StaticResource Label}" Text="Nghĩa tiếng Việt *"/>
+            <TextBox x:Name="MeaningBox"/>
+            <TextBlock Style="{StaticResource Label}" Text="Ví dụ (không bắt buộc)"/>
+            <TextBox x:Name="ExampleBox" TextWrapping="Wrap" ToolTip="Câu bạn gặp từ này, hoặc một câu tự đặt"/>
+        </StackPanel>
+
+        <TextBlock x:Name="ErrorText" Foreground="#B42318" TextWrapping="Wrap" Margin="2,8,0,0" Visibility="Collapsed"/>
+        <WrapPanel Margin="-3,12,0,0">
+            <Button x:Name="SaveButton" Content="Lưu" Click="Save_Click" Background="{StaticResource Accent}" Foreground="White"
+                    FontWeight="SemiBold" Padding="20,7" ToolTip="Lưu vào “Từ của tôi” và đưa vào ôn tập ngay hôm nay (Enter)"/>
+            <Button x:Name="LaterButton" Content="Để AI điền sau" Click="Later_Click"
+                    ToolTip="Đưa vào danh sách chờ ở tab Từ của tôi; một prompt cho AI điền nghĩa cả danh sách"/>
+            <Button x:Name="CloseButton" Content="Hủy" Click="Close_Click" Background="Transparent" Foreground="#667085"/>
+        </WrapPanel>
+        <TextBlock FontSize="11" Foreground="{StaticResource Muted}" Margin="2,8,0,0" TextWrapping="Wrap"
+                   Text="Enter: Lưu · Esc: Đóng. Từ lưu xong vào ôn tập ngay hôm nay (taskbar và phiên học)."/>
+    </StackPanel>
+</Window>

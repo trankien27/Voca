@@ -56,10 +56,15 @@ Check(w1.Review.IntervalDays == 1 && w1.Review.Lapses == 1 && Math.Abs(w1.Review
 // ---------- advancing ----------
 Check(!CourseEngine.Advance(data, d0), "same day: stays on day 1");
 Check(CourseEngine.Advance(data, d0.AddDays(1)) && data.Position.Day == 2, "next day: day 2");
-Check(!CourseEngine.Advance(data, d0.AddDays(9)), "unfinished day: no advance even after missed days");
+var unstudied = CourseEngine.DayWords(data);
+Check(CourseEngine.Advance(data, d0.AddDays(9)) && data.Position.Day == 3 && !CourseEngine.Advance(data, d0.AddDays(9)),
+    "new date: moves on even if the day was not studied, one day per date (days away are not piled up)");
+Check(unstudied.All(w => w.Review is { } r && r.Due == d0.AddDays(9) && w.IntroducedOn == d0.AddDays(1))
+      && unstudied.All(w => ReviewScheduler.IsDueReview(w, d0.AddDays(9))),
+    "words of an unstudied day go into reviews instead of being lost");
 var t2 = CourseEngine.BuildToday(data, d0.AddDays(1), out var fresh2);
-Check(fresh2.Count == 20 && t2.Contains(wrong), "day 2: 20 new + the wrong word as review");
-data.Position.Day = 7; data.Position.DayCompleted = true; data.Position.DayCompletedOn = d0.AddDays(7);
+Check(fresh2.Count == 20 && t2.Contains(wrong), "next day: 20 new + the wrong word as review");
+data.Position.Day = 7; data.Position.DayCompleted = true; data.Position.DayCompletedOn = d0.AddDays(7); data.Position.DayStartedOn = d0.AddDays(7);
 Check(CourseEngine.Advance(data, d0.AddDays(8)) && data.Position.PlanId == data.Plans[1].Id && data.Position.Day == 1
       && data.Position.PendingSummaryPlanId == data.Plans[0].Id, "end of plan 1 → plan 2 day 1, summary queued");
 Check(CourseEngine.StateOf(data, data.Plans[0].Id) == "done" && CourseEngine.StateOf(data, data.Plans[1].Id) == "now"
@@ -79,7 +84,7 @@ Check(CourseEngine.Current(data)?.Plan == data.Plans[0] && data.Position.Day == 
 
 // ---------- finishing, review plan, delete ----------
 var last = data.Course[^1];
-CourseEngine.SetPosition(data, last, 7); data.Position.DayCompleted = true; data.Position.DayCompletedOn = d0.AddDays(30);
+CourseEngine.SetPosition(data, last, 7, d0.AddDays(30)); data.Position.DayCompleted = true; data.Position.DayCompletedOn = d0.AddDays(30);
 Check(CourseEngine.Advance(data, d0.AddDays(31)) && data.Position.Finished && CourseEngine.NewWords(data).Count == 0, "end of the last plan → finished, reviews only");
 var review = CourseEngine.CreateReviewPlan(data, 20, 10, d0.AddDays(31));
 Check(review is not null && review.Words.Count == 1 && review.Words[0].Text == wrong.Text && review.Words[0].Review is null, "review plan copies forgotten words fresh");
@@ -289,19 +294,20 @@ CourseEngine.BuildToday(md, d0, out var stillDay1);
 Check(stillDay1.SetEquals(mFresh), "mistakes: today's lesson is unchanged when the day is tomorrow");
 MistakeDays.Record(md, [mPlan.Words[31]], d0.AddHours(20));
 Check(md.MistakeDay!.WordIds.Count == 5, "mistakes: a wrong word before the mistake day joins it");
-// d1: the course would move to day 2, but the mistake day replaces the lesson.
+// d1: the mistake day replaces the lesson and the course pauses.
 CourseEngine.Advance(md, d1);
 var mToday = CourseEngine.BuildToday(md, d1, out var mWords);
-Check(md.Position.Day == 2 && mWords.Count == 5 && mWords.All(w => md.MistakeDay.WordIds.Contains(w.Id)) && !mWords.Any(w => w.Day == 2 && w.Id != mPlan.Words[31].Id && w.Id != mPlan.Words[30].Id),
-    "mistakes: on the mistake day its words are today's words instead of day 2");
+Check(md.Position.Day == 1 && mWords.Count == 5 && mWords.All(w => md.MistakeDay.WordIds.Contains(w.Id)),
+    "mistakes: on the mistake day its words are today's words and the course pauses");
 var wrongAgain = mWords.First(w => w.Id == day1[0].Id);
 CourseEngine.ApplySession(md, mToday.Select(w => (w, w != wrongAgain)).ToList(), mWords, d1.AddHours(9));
 Check(md.Mistakes.Count == 1 && md.Mistakes[0].WordId == wrongAgain.Id && md.Mistakes[0].Times == 3, "mistakes: right answers leave the list, the wrong one stays (counted again)");
-Check(md.MistakeDay!.Done && md.Position.Day == 2 && !md.Position.DayCompleted, "mistakes: the mistake day is done, the course day stays open");
+Check(md.MistakeDay!.Done && md.Position.Day == 1, "mistakes: finishing the mistake day does not move the course");
 CourseEngine.BuildToday(md, d1, out var afterDone);
 Check(afterDone.Count == 5, "mistakes: finished mistake day stays on the taskbar until tomorrow");
 // d2: back to the course, day 2.
-Check(!CourseEngine.Advance(md, d2) && MistakeDays.Cleanup(md, d2) && md.MistakeDay is null, "mistakes: next day the course does not skip, the finished day is cleared");
+Check(CourseEngine.Advance(md, d2) && md.Position.Day == 2 && MistakeDays.Cleanup(md, d2) && md.MistakeDay is null,
+    "mistakes: next day the course moves on by one day, the finished mistake day is cleared");
 CourseEngine.BuildToday(md, d2, out var day2Words);
 Check(day2Words.All(w => w.Day == 2) && day2Words.Count == 20, "mistakes: the course continues with day 2");
 Check(MistakeDays.Schedule(md, d2, d2) == 1 && MistakeDays.Active(md, d2) is not null, "mistakes: can be scheduled for today");
@@ -311,8 +317,24 @@ MistakeDays.Cancel(md);
 CourseEngine.BuildToday(md, d2, out var cancelled);
 Check(md.MistakeDay is null && cancelled.Count == 20 && md.Mistakes.Count == 1, "mistakes: cancelling keeps the words in the list and restores the lesson");
 MistakeDays.Schedule(md, d2.AddDays(1), d2);
-Check(MistakeDays.Active(md, d2.AddDays(4)) is not null, "mistakes: a missed mistake day is still waiting days later");
+Check(MistakeDays.Active(md, d2.AddDays(1)) is not null && MistakeDays.Active(md, d2.AddDays(2)) is null
+      && MistakeDays.Cleanup(md, d2.AddDays(2)) && md.MistakeDay is null && md.Mistakes.Count == 1,
+    "mistakes: a missed mistake day is dropped the next day (words stay in the lists), so the course is never held up");
 Check(MistakeDays.Schedule(new AppData(), d1, d0) == 0, "mistakes: nothing to schedule without wrong words");
+
+// ---- a mistake day chosen after the course already moved that morning ----
+var pz = new AppData();
+SeedData.EnsureSeeded(pz);
+pz.Position.DayStartedOn = d0;
+CourseEngine.Advance(pz, d1);                       // morning of d1: day 2
+MistakeDays.Record(pz, [pz.Plans[0].Words[0]], d1);
+MistakeDays.Schedule(pz, d1, d1);                   // later on d1: "Học hôm nay"
+CourseEngine.Advance(pz, d1);
+var pzToday = CourseEngine.BuildToday(pz, d1, out var pzFresh);
+CourseEngine.ApplySession(pz, pzToday.Select(w => (w, true)).ToList(), pzFresh, d1.AddHours(20));
+var dayOnD2 = (CourseEngine.Advance(pz, d2), pz.Position.Day).Item2;
+var dayOnD3 = (CourseEngine.Advance(pz, d0.AddDays(3)), pz.Position.Day).Item2;
+Check(dayOnD2 == 2 && dayOnD3 == 3, "mistakes: a course day whose date went to a mistake day is studied the next day, not skipped");
 
 // ---- mistake lists ----
 var ml = new AppData();
@@ -364,6 +386,152 @@ orphan.MistakeDay = new MistakeDay { Date = d0, WordIds = [Guid.NewGuid()] };
 var orphanToday = CourseEngine.BuildToday(orphan, d0, out var orphanFresh);
 CourseEngine.ApplySession(orphan, orphanToday.Select(w => (w, true)).ToList(), orphanFresh, d0.AddHours(9));
 Check(orphanFresh.Count == 20 && orphan.Position.DayCompleted && orphan.MistakeDay is null, "mistakes: a mistake day whose words were deleted falls back to the course day");
+// ---- session question kinds ----
+Check(CourseEngine.Blank("Please show your boarding pass at the gate.", "boarding pass") == "Please show your _____ at the gate."
+      && CourseEngine.Blank("Our flight had a two-hour delay.", "delay") == "Our flight had a two-hour _____."
+      && CourseEngine.Blank("We checked in at three o'clock.", "check in") == "We _____ at three o'clock."
+      && CourseEngine.Blank("Delays are common.", "delay") == "_____ are common.",
+    "quiz: gap-fill blanks the word, allowing simple endings");
+Check(CourseEngine.Blank("She went home early.", "go") is null && CourseEngine.Blank("", "go") is null && CourseEngine.Blank("A cart.", "car") is null,
+    "quiz: no gap when the sentence does not contain the word");
+var qd = new AppData();
+SeedData.EnsureSeeded(qd);
+var qWords = qd.Plans[0].Words.Take(8).ToList();
+var typed = CourseEngine.BuildQuiz(qd, qWords, new Random(2), typing: true);
+Check(typed.Select(q => q.Kind).Take(4).SequenceEqual([QuizKind.ChooseWord, QuizKind.ChooseMeaning, typed[2].Kind, QuizKind.Type])
+      && typed[2].Kind is QuizKind.Cloze or QuizKind.ChooseWord, "quiz: with typing the kinds rotate word, meaning, gap-fill, typing");
+Check(typed.Where(q => q.Kind == QuizKind.Type).All(q => q.Options.Count == 0 && q.Prompt == q.Word.Meaning && q.Correct == q.Word.Text)
+      && typed.Where(q => q.Kind == QuizKind.Cloze).All(q => q.Prompt.Contains("_____") && q.Options.Contains(q.Word.Text) && q.Options.Count == 4),
+    "quiz: typing has no options; gap-fill shows the sentence and offers 4 words");
+Check(CourseEngine.BuildQuiz(qd, qWords, new Random(2)).All(q => q.Kind is QuizKind.ChooseWord or QuizKind.ChooseMeaning),
+    "quiz: without typing only the two choice kinds are used");
+
+// ---- quick rating: learned / not remembered ----
+var lr = new AppData();
+SeedData.EnsureSeeded(lr);
+var lrDay = CourseEngine.BuildToday(lr, d0, out _);
+var learnedWord = lrDay[0];
+MistakeDays.Record(lr, [learnedWord], d0, "Bài kiểm tra 08:00 · x");
+CourseEngine.MarkLearned(lr, learnedWord, d0.AddHours(9));
+var afterLearned = CourseEngine.BuildToday(lr, d0, out var lrFresh);
+Check(!afterLearned.Contains(learnedWord) && lrFresh.Count == 19 && MistakeDays.TimesWrong(lr, learnedWord) == 0 && lr.MistakeLists.Count == 0,
+    "learned: the word leaves today's words and the mistake lists");
+ReviewScheduler.Rate(lr, learnedWord, false, d0.AddHours(10));
+CourseEngine.BuildToday(lr, d0.AddDays(1), out _);
+Check(!CourseEngine.BuildToday(lr, d0.AddDays(1), out _).Contains(learnedWord), "learned: never comes back as a review");
+CourseEngine.UnmarkLearned(learnedWord);
+Check(CourseEngine.BuildToday(lr, d0.AddDays(1), out _).Contains(learnedWord), "learned: undo brings it back");
+var forgotten = lrDay[1];
+CourseEngine.MarkNotRemembered(lr, forgotten, d0.AddHours(11));
+Check(ReviewScheduler.IsWrongToday(forgotten, d0) && forgotten.Review!.Due == d0.AddDays(1)
+      && lr.MistakeLists.Single().Title == MistakeDays.SessionTitle(d0) && lr.MistakeLists.Single().WordIds.Contains(forgotten.Id),
+    "not remembered: review tomorrow, shown first today, kept in today's mistake list");
+foreach (var w in CourseEngine.DayWords(lr)) CourseEngine.MarkLearned(lr, w, d0.AddHours(12));
+Check(CourseEngine.CompleteIfAllLearned(lr, d0) && lr.Position.DayCompleted && !CourseEngine.CompleteIfAllLearned(lr, d0),
+    "learned: a day with every word learned counts as done");
+CourseEngine.Advance(lr, d0.AddDays(1));
+Check(lr.Position.Day == 2, "learned: next day the course moves on");
+
+// ---- Từ của tôi (Ctrl+Alt+V) ----
+Check(QuickAdd.Normalize("  “Serendipity.” ") == "serendipity" && QuickAdd.Normalize("Look  Up\n") == "look up" && QuickAdd.Normalize("NASA") == "NASA"
+      && QuickAdd.Normalize("don’t") == "don't",
+    "my words: copied text is cleaned (spaces, quotes, punctuation, case)");
+Check(QuickAdd.Normalize("") is null && QuickAdd.Normalize("12345") is null && QuickAdd.Normalize("a b c d e f g") is null
+      && QuickAdd.Normalize(new string('x', 70)) is null && QuickAdd.Normalize("https://example.com/page") is null,
+    "my words: sentences, numbers and links are refused");
+var mw = new AppData();
+SeedData.EnsureSeeded(mw);
+var existing = mw.Plans[1].Words[5];
+var dupe = QuickAdd.Add(mw, existing.Text.ToUpperInvariant() + ".", d0);
+Check(!dupe.Added && dupe.ExistingPlan == mw.Plans[1] && dupe.ExistingWord == existing && mw.Inbox.Count == 0,
+    "my words: a word already in the library is not added (says which plan)");
+Check(QuickAdd.Add(mw, "serendipity", d0).Added && QuickAdd.Add(mw, "Serendipity", d0) is { Added: false, AlreadyWaiting: true }
+      && QuickAdd.Add(mw, "jaywalk", d0).Added && QuickAdd.Add(mw, "lol 123 http://x", d0).Invalid && mw.Inbox.Count == 2,
+    "my words: new words wait once; repeats and junk are refused");
+var myPrompt = QuickAdd.BuildPrompt(mw.Inbox.Select(i => i.Text).ToList(), d0);
+Check(myPrompt.Contains("serendipity, jaywalk") && myPrompt.Contains("# Tên bộ từ: Từ của tôi") && myPrompt.Contains("| STT | Từ |"),
+    "my words: the prompt lists the waiting words and the form");
+var answer = $"""
+    ```markdown
+    # Tên bộ từ: Từ của tôi
+
+    ## Ngày 1 — Từ thêm 06/10
+
+    | STT | Từ | Phiên âm | Loại | Nghĩa | Ví dụ |
+    |---|---|---|---|---|---|
+    | 1 | serendipity | /ˌserənˈdɪpəti/ | n | sự tình cờ may mắn | Meeting her was pure serendipity. |
+    | 2 | jaywalk | /ˈdʒeɪwɔːk/ | v | băng qua đường ẩu | Don't jaywalk on this busy road. |
+    | 3 | {existing.Text} | /x/ | n | đã có | Already in the library. |
+    ```
+    """;
+var imported = QuickAdd.Import(mw, answer, d0.AddHours(9));
+var myPlan = mw.Plans.Single(p => p.Name == QuickAdd.PlanName);
+Check(imported.Added.Count == 2 && imported.SkippedExisting.Single() == existing.Text && imported.Day == 1 && mw.Inbox.Count == 0
+      && myPlan.Words.Count == 2 && !mw.Course.Contains(myPlan.Id) && myPlan.DayTitle(1).StartsWith("Từ thêm"),
+    "my words: import adds new words as a day of “Từ của tôi” (outside the course), skips existing ones, empties the list");
+QuickAdd.Add(mw, "zugzwang", d0.AddDays(1));
+var second = QuickAdd.Import(mw, answer.Replace("serendipity", "zugzwang").Replace("jaywalk", "flummox"), d0.AddDays(1));
+Check(second.Day == 2 && second.Added.Select(w => w.Text).SequenceEqual(["zugzwang", "flummox"]) && myPlan.DayCount == 2 && mw.Inbox.Count == 0,
+    "my words: a later import becomes the next day");
+Check(QuickAdd.Import(mw, "xin chào", d0).Errors.Count > 0, "my words: an answer without the form is reported, nothing added");
+MistakeDays.ApplyPractice(mw, [(imported.Added[0], true), (imported.Added[1], false)], d0.AddHours(10));
+Check(imported.Added.All(w => w.IntroducedOn == d0) && imported.Added[1].Review!.Due == d0.AddDays(1)
+      && mw.MistakeLists.Single().Title == MistakeDays.SessionTitle(d0),
+    "my words: studying them starts reviews; a wrong one joins today's mistake list");
+
+// ---- Ctrl+Alt+V window: save a word written by hand ----
+Check(QuickAdd.Normalize("v2.8.0") is null && QuickAdd.Normalize("COVID-19") is null && QuickAdd.Normalize("ver_2") is null,
+    "my words: text with digits (versions, codes) is never taken as a word");
+var sw = new AppData();
+SeedData.EnsureSeeded(sw);
+QuickAdd.Add(sw, "serendipity", d0);
+var saved1 = QuickAdd.SaveWord(sw, " Serendipity ", "ˌserənˈdɪpəti", "n", "sự tình cờ may mắn", "Pure serendipity.", d0.AddHours(9));
+var swPlan = sw.Plans.Single(p => p.Name == QuickAdd.PlanName);
+Check(saved1 is { Text: "serendipity", Phonetic: "/ˌserənˈdɪpəti/", Day: 1 } && swPlan.DayTitle(1) == QuickAdd.DayTitleFor(d0)
+      && !sw.Course.Contains(swPlan.Id) && sw.Inbox.Count == 0,
+    "my words: a saved word goes to today's day of “Từ của tôi” and leaves the waiting list");
+var saved2 = QuickAdd.SaveWord(sw, "flummox", "", "v", "làm bối rối", "", d0.AddHours(15));
+var saved3 = QuickAdd.SaveWord(sw, "zugzwang", "", "n", "thế bắt buộc phải đi", "", d0.AddDays(1));
+Check(saved2!.Day == 1 && saved3!.Day == 2 && swPlan.DayCount == 2, "my words: same date shares a day, the next date starts a new one");
+Check(CourseEngine.BuildToday(sw, d0, out var swFresh).Contains(saved1!) && !swFresh.Contains(saved1!)
+      && CourseEngine.BuildToday(sw, d0.AddDays(1), out _).Contains(saved3),
+    "my words: a saved word shows up in today's reviews right away");
+Check(QuickAdd.SaveWord(sw, "flummox", "", "", "x", "", d0) is null && QuickAdd.SaveWord(sw, sw.Plans[0].Words[0].Text, "", "", "x", "", d0) is null
+      && QuickAdd.SaveWord(sw, "quokka", "", "", "  ", "", d0) is null && QuickAdd.SaveWord(sw, "v2.8.0", "", "", "x", "", d0) is null,
+    "my words: no save for words already in the library, without a meaning, or not a word");
+
+// ---- day finished: study the next day now ----
+var sn = new AppData();
+SeedData.EnsureSeeded(sn);
+var snDay1 = CourseEngine.BuildToday(sn, d0, out var snFresh);
+CourseEngine.ApplySession(sn, snDay1.Select(w => (w, true)).ToList(), snFresh, d0.AddHours(9));
+Check(CourseEngine.NextDay(sn) is var (np1, nd1) && np1 == sn.Plans[0] && nd1 == 2, "next day: day 2 of the same plan");
+Check(CourseEngine.StudyNextDayNow(sn, d0) && sn.Position.Day == 2 && !sn.Position.DayCompleted
+      && CourseEngine.BuildToday(sn, d0, out var snNow).Count > 0 && snNow.All(w => w.Day == 2),
+    "study next now: day 2 starts the same date, with its new words");
+Check(!CourseEngine.Advance(sn, d0) && CourseEngine.Advance(sn, d1) && sn.Position.Day == 3,
+    "study next now: the next date still moves on by one day");
+sn.Position.Day = 7;
+Check(CourseEngine.NextDay(sn) is var (np2, nd2) && np2 == sn.Plans[1] && nd2 == 1, "next day after the last day: the next plan, day 1");
+MistakeDays.Record(sn, [sn.Plans[0].Words[0]], d1);
+MistakeDays.Schedule(sn, d1, d1);
+Check(!CourseEngine.StudyNextDayNow(sn, d1), "study next now: not on a mistake day");
+
+// ---- fields from a newer version survive a save by this one ----
+var fwFolder = Path.Combine(Path.GetTempPath(), "voca-fw-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(fwFolder);
+File.WriteAllText(Path.Combine(fwFolder, "voca.json"), """
+    { "DataVersion": 1, "FutureThing": { "a": 1 }, "Settings": { "RotationSeconds": 25, "FutureSetting": true },
+      "Plans": [ { "Name": "P", "Words": [ { "Day": 1, "Text": "x", "Meaning": "y", "FutureWordFlag": "keep me" } ] } ] }
+    """);
+var fw = new Store(fwFolder);
+fw.Update(d => d.Settings.RotationSeconds = 30);
+var fwText = File.ReadAllText(Path.Combine(fwFolder, "voca.json"));
+Check(fwText.Contains("\"FutureThing\"") && fwText.Contains("\"FutureSetting\": true") && fwText.Contains("\"FutureWordFlag\": \"keep me\"")
+      && new Store(fwFolder).Data.Settings.RotationSeconds == 30,
+    "data: fields this version does not know are kept when it saves (going back a version loses nothing)");
+Directory.Delete(fwFolder, true);
+
 // ---- self-update ----
 Check(Updater.ParseTag("v2.7.0") == new Version(2, 7, 0, 0) && Updater.ParseTag("2.7") == new Version(2, 7, 0, 0) && Updater.ParseTag("latest") is null,
     "update: release tags v2.7.0 / 2.7 are read, others ignored");

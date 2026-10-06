@@ -33,20 +33,23 @@ public partial class SessionWindow : Window
     private int _index;
     private bool _flipped;
     private readonly SessionMode _mode;
+    /// <summary>Choices offered on the result screen (e.g. go on to the next day, take a test).</summary>
+    private readonly IReadOnlyList<(string Label, Action Run)> _nextSteps;
     private string? _picked;
 
     private sealed record ResultRow(string Mark, Brush MarkBrush, string Word, string Meaning, string Next);
 
     public SessionWindow(AppData data, IReadOnlyList<Word> newWords, IReadOnlyList<Word> reviews, string courseText,
         Action<IReadOnlyList<(Word Word, bool Correct)>, IReadOnlyCollection<Word>> onFinished, Action<string> speak,
-        SessionMode mode = SessionMode.Course)
+        SessionMode mode = SessionMode.Course, IReadOnlyList<(string Label, Action Run)>? nextSteps = null)
     {
         InitializeComponent();
         _mode = mode;
-        if (mode != SessionMode.Course) StageLearnText.Text = "Xem lại từ sai";
+        _nextSteps = nextSteps ?? [];
+        if (mode is SessionMode.MistakeDay or SessionMode.Practice) StageLearnText.Text = "Xem lại từ sai";
         _newWords = newWords.ToList();
         _learn = newWords.ToList();
-        _quiz = CourseEngine.BuildQuiz(data, [.. newWords, .. reviews], Random.Shared);
+        _quiz = CourseEngine.BuildQuiz(data, [.. newWords, .. reviews], Random.Shared, data.Settings.QuizTyping);
         _onFinished = onFinished;
         _speak = speak;
         CourseText.Text = courseText;
@@ -120,15 +123,34 @@ public partial class SessionWindow : Window
         BackButton.IsEnabled = _index > 0;
         NextButton.IsEnabled = true;
         NextButton.Content = _index == _learn.Count - 1 ? "Bắt đầu kiểm tra" : "Tiếp";
-        FooterText.Text = $"{(_mode == SessionMode.Course ? "Từ mới" : "Từ sai")} {_index + 1} / {_learn.Count}";
+        FooterText.Text = $"{(_mode is SessionMode.Course or SessionMode.NewWords ? "Từ mới" : "Từ sai")} {_index + 1} / {_learn.Count}";
     }
 
     private void RenderQuestion()
     {
         var q = _quiz[_index];
-        QuizQuestionLabel.Text = q.AskWord ? "Từ nào có nghĩa là:" : "Nghĩa của từ này là gì?";
+        QuizQuestionLabel.Text = q.Kind switch
+        {
+            QuizKind.ChooseWord => "Từ nào có nghĩa là:",
+            QuizKind.ChooseMeaning => "Nghĩa của từ này là gì?",
+            QuizKind.Cloze => "Chọn từ điền vào chỗ trống:",
+            _ => "Gõ từ tiếng Anh có nghĩa là:"
+        };
         QuizPrompt.Text = q.Prompt;
-        QuizPrompt.FontFamily = q.AskWord ? new System.Windows.Media.FontFamily("Segoe UI") : new System.Windows.Media.FontFamily("Georgia");
+        QuizPrompt.FontFamily = new System.Windows.Media.FontFamily(q.Kind == QuizKind.ChooseMeaning ? "Georgia" : "Segoe UI");
+        QuizPrompt.FontSize = q.Kind == QuizKind.Cloze ? 21 : 26;
+        QuizPrompt.FontWeight = q.Kind == QuizKind.Cloze ? FontWeights.SemiBold : FontWeights.Bold;
+        TypePanel.Visibility = q.Kind == QuizKind.Type ? Visibility.Visible : Visibility.Collapsed;
+        if (q.Kind == QuizKind.Type)
+        {
+            TypeBox.IsReadOnly = _picked is not null;
+            TypeCheckButton.IsEnabled = _picked is null;
+            if (_picked is null)
+            {
+                TypeBox.Text = "";
+                Dispatcher.BeginInvoke(() => TypeBox.Focus(), System.Windows.Threading.DispatcherPriority.Input);
+            }
+        }
         QuizOptions.Children.Clear();
         for (var i = 0; i < q.Options.Count; i++)
         {
@@ -147,10 +169,10 @@ public partial class SessionWindow : Window
         {
             QuizFeedback.Text = "";
         }
-        else if (_picked == q.Correct)
+        else if (IsRight(q, _picked))
         {
             QuizFeedback.Foreground = Good;
-            QuizFeedback.Text = "Chính xác.";
+            QuizFeedback.Text = q.Kind == QuizKind.ChooseMeaning ? "Chính xác." : $"Chính xác. {q.Word.Text} {q.Word.Phonetic}";
         }
         else
         {
@@ -163,14 +185,23 @@ public partial class SessionWindow : Window
         FooterText.Text = $"Câu {_index + 1} / {_quiz.Count} · đúng {_answers.Count(a => a.Correct)}";
     }
 
+    private static bool IsRight(QuizQuestion q, string given) =>
+        q.Kind == QuizKind.Type ? TestBuilder.IsTypedCorrectly(given, q.Correct) : given == q.Correct;
+
     private void Pick(string option)
     {
         if (_picked is not null) return;
         _picked = option;
         var q = _quiz[_index];
-        _answers.Add((q.Word, option == q.Correct));
+        _answers.Add((q.Word, IsRight(q, option)));
         if (q.AskWord) _speak(q.Word.Text);
         RenderQuestion();
+    }
+
+    private void TypeCheck_Click(object sender, RoutedEventArgs e)
+    {
+        if (TypeBox.Text.Trim().Length == 0) { TypeBox.Focus(); return; }
+        Pick(TypeBox.Text.Trim());
     }
 
     private void RenderResult()
@@ -183,6 +214,9 @@ public partial class SessionWindow : Window
             SessionMode.MistakeDay => correct == _answers.Count
                 ? "Đúng hết! Các từ này đã ra khỏi danh sách từ sai. Mai học tiếp lộ trình."
                 : "Từ trả lời đúng đã ra khỏi danh sách từ sai; từ còn sai ở lại danh sách và quay lại vào ngày mai.",
+            SessionMode.NewWords => correct == _answers.Count
+                ? "Đúng hết! Các từ này đã vào lịch ôn tập."
+                : "Các từ đã vào lịch ôn tập; từ làm sai sẽ quay lại vào ngày mai và nằm trong danh sách từ sai.",
             SessionMode.Practice => correct == _answers.Count
                 ? "Đúng hết! Các từ này đã ra khỏi danh sách từ sai."
                 : "Từ trả lời đúng đã ra khỏi danh sách từ sai; từ còn sai vẫn ở lại để học lại sau.",
@@ -200,6 +234,16 @@ public partial class SessionWindow : Window
         BackButton.Visibility = Visibility.Collapsed;
         NextButton.IsEnabled = true;
         NextButton.Content = "Xong";
+        NextStepsPanel.Visibility = _nextSteps.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        NextStepsButtons.Children.Clear();
+        for (var i = 0; i < _nextSteps.Count; i++)
+        {
+            var (label, run) = _nextSteps[i];
+            var button = new Button { Content = label, Padding = new Thickness(12, 6, 12, 6) };
+            if (i == 0) { button.Background = (Brush)FindResource("Accent"); button.Foreground = System.Windows.Media.Brushes.White; button.FontWeight = FontWeights.SemiBold; }
+            button.Click += (_, _) => { Close(); run(); };
+            NextStepsButtons.Children.Add(button);
+        }
         FooterText.Text = "Đã lưu kết quả.";
     }
 
@@ -245,7 +289,12 @@ public partial class SessionWindow : Window
         if (_stage == Stage.Learn && e.Key == Key.Space) { _flipped = !_flipped; RenderCard(); e.Handled = true; }
         else if (_stage == Stage.Learn && e.Key == Key.Left) { Back_Click(this, e); e.Handled = true; }
         else if (_stage == Stage.Learn && e.Key == Key.Right) { GoNext(); e.Handled = true; }
-        else if (_stage == Stage.Quiz && e.Key is >= Key.D1 and <= Key.D4 && _picked is null)
+        else if (_stage == Stage.Quiz && e.Key == Key.Enter && _picked is null && _quiz[_index].Kind == QuizKind.Type)
+        {
+            TypeCheck_Click(this, e);
+            e.Handled = true;
+        }
+        else if (_stage == Stage.Quiz && e.Key is >= Key.D1 and <= Key.D4 && _picked is null && _quiz[_index].Kind != QuizKind.Type)
         {
             var i = e.Key - Key.D1;
             if (i < _quiz[_index].Options.Count) Pick(_quiz[_index].Options[i]);

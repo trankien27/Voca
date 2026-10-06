@@ -43,6 +43,7 @@ public partial class LibraryWindow : Window
         _actions = actions;
         _openStats = actions.OpenStats;
         MistakesTab.Content = new MistakesView(store, actions);
+        MyWordsTab.Content = new MyWordsView(store, actions);
         // The version list is fetched the first time Settings is opened.
         Tabs.SelectionChanged += (_, e) =>
         {
@@ -63,6 +64,9 @@ public partial class LibraryWindow : Window
 
     /// <summary>Brings the "Từ sai" tab to the front.</summary>
     public void ShowMistakes() => Tabs.SelectedItem = MistakesTab;
+
+    /// <summary>Brings the "Từ của tôi" tab to the front.</summary>
+    public void ShowMyWords() => Tabs.SelectedItem = MyWordsTab;
 
     /// <summary>Brings Settings → "Cập nhật phiên bản" to the front.</summary>
     public void ShowUpdates()
@@ -209,6 +213,19 @@ public partial class LibraryWindow : Window
             _store.Save();
             Status($"Đã lưu lúc {DateTime.Now:HH:mm:ss}.");
         });
+    }
+
+    /// <summary>"Đã thuộc" ticked or cleared in the word table.</summary>
+    private void LearnedBox_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not Word word) return;
+        var learned = (sender as System.Windows.Controls.CheckBox)?.IsChecked == true;
+        _store.Update(d =>
+        {
+            if (learned) CourseEngine.MarkLearned(d, word, DateTime.Now);
+            else CourseEngine.UnmarkLearned(word);
+        });
+        Status(learned ? $"“{word.Text}”: đã thuộc, không hiện nữa." : $"“{word.Text}”: sẽ hiện và được ôn lại.");
     }
 
     private void SavePlanInfo_Click(object sender, RoutedEventArgs e)
@@ -604,6 +621,8 @@ public partial class LibraryWindow : Window
         ReminderHourBox.ItemsSource = new[] { "Tắt" }.Concat(Enumerable.Range(16, 8).Select(h => $"{h}:00")).ToList();
         ReminderHourBox.SelectedItem = s.ReminderHour is >= 16 and <= 23 ? $"{s.ReminderHour}:00" : "Tắt";
         StartWithWindowsBox.IsChecked = WindowsStartupService.IsEnabled();
+        QuizTypingBox.IsChecked = s.QuizTyping;
+        DailyCheckBox.IsChecked = s.CheckUpdatesDaily;
         LoadPillStyle(s.Pill);
         VersionText.Text = $"Đang dùng: Voca {Updater.Current.ToString(3)}";
         DataPathText.Text =$"Toàn bộ dữ liệu (lộ trình, tiến độ, cài đặt) nằm trong {Path.Combine(_store.Folder, "voca.json")}. Mỗi lần lưu giữ một bản .bak.";
@@ -633,6 +652,7 @@ public partial class LibraryWindow : Window
             d.Settings.MaxReviewsPerDay = maxReviews;
             d.Settings.MorningReminder = MorningReminderBox.IsChecked == true;
             d.Settings.ReminderHour = hour;
+            d.Settings.QuizTyping = QuizTypingBox.IsChecked == true;
         });
         Status($"Đã lưu cài đặt lúc {DateTime.Now:HH:mm:ss}.");
     }
@@ -822,6 +842,13 @@ public partial class LibraryWindow : Window
     }
 
     private void RefreshVersions_Click(object sender, RoutedEventArgs e) => _ = LoadVersionsAsync();
+
+    private void DailyCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        var on = DailyCheckBox.IsChecked == true;
+        _store.Update(d => d.Settings.CheckUpdatesDaily = on);
+    }
 
     /// <summary>Asks, downloads and verifies the chosen version, installs it over this exe and restarts.</summary>
     private async void InstallVersion_Click(object sender, RoutedEventArgs e)
