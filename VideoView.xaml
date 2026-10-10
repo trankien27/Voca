@@ -28,10 +28,29 @@
                     <StackPanel DockPanel.Dock="Top">
                         <TextBlock Style="{StaticResource Step}" Text="1 · Chọn video và tạo phụ đề"/>
                         <DockPanel Margin="-3,0,0,6">
-                            <Button DockPanel.Dock="Left" x:Name="PickButton" Content="Chọn video hoặc .srt…" Click="Pick_Click"/>
+                            <Button DockPanel.Dock="Left" x:Name="PickButton" Content="Chọn video hoặc .srt…" Click="Pick_Click"
+                                    ToolTip="Giữ Ctrl hoặc Shift để chọn nhiều video và tạo phụ đề lần lượt cho cả loạt"/>
                             <TextBlock x:Name="FileText" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="6,0,0,0"
-                                       TextTrimming="CharacterEllipsis" Text="Chưa chọn file"/>
+                                       TextTrimming="CharacterEllipsis" Text="Chưa chọn file (chọn được nhiều video)"/>
                         </DockPanel>
+                        <!-- several videos: one row each, subtitled one after another -->
+                        <StackPanel x:Name="QueuePanel" Visibility="Collapsed" Margin="0,0,0,6">
+                            <ListBox x:Name="QueueList" MaxHeight="140" BorderBrush="#E6E3F5" HorizontalContentAlignment="Stretch"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="QueueList_SelectionChanged"
+                                     ToolTip="Chọn một video để xem phụ đề, phát video hoặc tìm từ mới của video đó">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <DockPanel Margin="2,1">
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding State}" Foreground="{Binding StateInk}" FontSize="11"
+                                                       VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                            <TextBlock Text="{Binding Name}" Foreground="#172033" TextTrimming="CharacterEllipsis"/>
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <CheckBox x:Name="RedoBox" Content="Tạo lại cả video đã có phụ đề (ghi đè file .srt)" Margin="0,6,0,0"
+                                      Foreground="{StaticResource Muted}" Click="RedoBox_Click"/>
+                        </StackPanel>
                         <DockPanel Margin="-3,0,0,6">
                             <TextBlock DockPanel.Dock="Left" Text="Model" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="3,0,8,0"/>
                             <ComboBox x:Name="ModelBox" DisplayMemberPath="Label" Padding="6,4" SelectionChanged="ModelBox_SelectionChanged"/>

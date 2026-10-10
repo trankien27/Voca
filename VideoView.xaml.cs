@@ -1,14 +1,20 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Media;
 using Voca.Services;
+using Brush = System.Windows.Media.Brush;
+using Color = System.Windows.Media.Color;
 
 namespace Voca;
 
 /// <summary>
 /// The "Phụ đề video" tab: recognises the speech of a video into an .srt saved next to it (or opens an .srt),
 /// then optionally turns the words not in the library into a new plan via the usual AI-chat prompt.
-/// Switching tabs leaves a recognition running; closing the library window cancels it.
+/// Several videos picked at once are subtitled one after another (a queue). Switching tabs leaves a
+/// recognition running; closing the library window cancels it.
 /// </summary>
 public partial class VideoView : System.Windows.Controls.UserControl
 {
@@ -20,6 +26,29 @@ public partial class VideoView : System.Windows.Controls.UserControl
     private List<WordRow> _words = [];
     private CancellationTokenSource? _work;
     private Window? _host;
+    private readonly ObservableCollection<QueueItem> _queue = [];
+
+    private static readonly Brush MutedInk = Frozen(0x66, 0x70, 0x85), WorkInk = Frozen(0x6C, 0x5C, 0xE7),
+        DoneInk = Frozen(0x06, 0x76, 0x47), ErrorInk = Frozen(0xB4, 0x23, 0x18);
+
+    /// <summary>A video of the queue and what happened to it.</summary>
+    private sealed class QueueItem(string path) : INotifyPropertyChanged
+    {
+        public string Path { get; } = path;
+        public string Name => System.IO.Path.GetFileName(Path);
+        public bool HasSubtitles => File.Exists(SrtPathFor(Path));
+        public string State { get; private set; } = "";
+        public Brush StateInk { get; private set; } = MutedInk;
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        public void Set(string state, Brush ink)
+        {
+            State = state;
+            StateInk = ink;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(State)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(StateInk)));
+        }
+    }
 
     private sealed record LineRow(string Time, string Text);
 
@@ -38,6 +67,7 @@ public partial class VideoView : System.Windows.Controls.UserControl
         _store = store;
         ModelBox.ItemsSource = Transcriber.Models;
         ModelBox.SelectedIndex = 0;
+        QueueList.ItemsSource = _queue;
     }
 
     private void View_Loaded(object sender, RoutedEventArgs e)
@@ -54,10 +84,56 @@ public partial class VideoView : System.Windows.Controls.UserControl
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Filter = "Video, âm thanh hoặc phụ đề|*.mp4;*.m4v;*.mkv;*.mov;*.avi;*.wmv;*.webm;*.mp3;*.m4a;*.wav;*.srt|Tất cả (*.*)|*.*"
+            Filter = "Video, âm thanh hoặc phụ đề|*.mp4;*.m4v;*.mkv;*.mov;*.avi;*.wmv;*.webm;*.mp3;*.m4a;*.wav;*.srt|Tất cả (*.*)|*.*",
+            Multiselect = true
         };
         if (dialog.ShowDialog(_host) != true) return;
-        _mediaPath = dialog.FileName;
+        var media = dialog.FileNames.Where(f => !f.EndsWith(".srt", StringComparison.OrdinalIgnoreCase)).ToList();
+        _queue.Clear();
+        if (media.Count < 2)
+        {
+            QueuePanel.Visibility = Visibility.Collapsed;
+            OpenFile(media.FirstOrDefault() ?? dialog.FileName);
+            return;
+        }
+        foreach (var file in media) _queue.Add(new QueueItem(file));
+        RedoBox.IsChecked = false;
+        ShowQueueStates();
+        QueuePanel.Visibility = Visibility.Visible;
+        QueueList.SelectedIndex = 0;
+        var have = _queue.Count(i => i.HasSubtitles);
+        Status($"{_queue.Count} video" + (have > 0 ? $", {have} video đã có phụ đề (sẽ bỏ qua)" : "")
+               + ". Bấm “Tạo phụ đề” để tạo lần lượt từng video; bấm vào một video để xem phụ đề của nó.");
+        UpdateButtons();
+    }
+
+    /// <summary>"Chờ" or "Đã có phụ đề" for each video not processed yet, depending on "Tạo lại".</summary>
+    private void ShowQueueStates()
+    {
+        var redo = RedoBox.IsChecked == true;
+        foreach (var item in _queue)
+            if (item.HasSubtitles) item.Set(redo ? "Sẽ tạo lại" : "Đã có phụ đề", redo ? MutedInk : DoneInk);
+            else item.Set("Chờ", MutedInk);
+    }
+
+    private void RedoBox_Click(object sender, RoutedEventArgs e)
+    {
+        ShowQueueStates();
+        UpdateButtons();
+    }
+
+    private List<QueueItem> Pending => _queue.Where(i => RedoBox.IsChecked == true || !i.HasSubtitles).ToList();
+
+    private void QueueList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        // While the queue runs, the list shows progress; the video being recognised is on screen.
+        if (_work is null && QueueList.SelectedItem is QueueItem item) OpenFile(item.Path);
+    }
+
+    /// <summary>Opens one file: a video (with its .srt when one sits next to it) or an .srt (with its video).</summary>
+    private void OpenFile(string path)
+    {
+        _mediaPath = path;
         FileText.Text = Path.GetFileName(_mediaPath);
         PlanNameBox.Text = Path.GetFileNameWithoutExtension(_mediaPath);
         SetLines([]);
@@ -105,7 +181,14 @@ public partial class VideoView : System.Windows.Controls.UserControl
 
     private async void Run_Click(object sender, RoutedEventArgs e)
     {
-        if (_mediaPath is null || ModelBox.SelectedItem is not SpeechModel model) return;
+        if (ModelBox.SelectedItem is not SpeechModel model) return;
+        var queue = _queue.Count > 1;
+        if (!queue && _mediaPath is null) return;
+        if (queue && Pending.Count == 0)
+        {
+            Status("Mọi video đều đã có phụ đề. Tích “Tạo lại cả video đã có phụ đề” nếu muốn tạo lại.");
+            return;
+        }
         if (!Transcriber.IsDownloaded(_store.Folder, model))
         {
             var ok = System.Windows.MessageBox.Show(_host!,
@@ -116,8 +199,6 @@ public partial class VideoView : System.Windows.Controls.UserControl
 
         _work = new CancellationTokenSource();
         var cancel = _work.Token;
-        var started = DateTime.Now;
-        SetLines([]);
         SetBusy(true);
         try
         {
@@ -127,20 +208,8 @@ public partial class VideoView : System.Windows.Controls.UserControl
                 await Transcriber.DownloadAsync(_store.Folder, model,
                     new Progress<double>(p => { Progress.Value = p * 100; StageText.Text = $"Đang tải model {model.FileName}… {p:P0}"; }), cancel);
             }
-            Progress.Value = 0;
-            var found = new List<SubtitleLine>();
-            var lines = await Transcriber.TranscribeAsync(_store.Folder, model, _mediaPath,
-                new Progress<string>(text => StageText.Text = text),
-                new Progress<int>(p => { Progress.Value = p; StageText.Text = $"Đang nhận dạng giọng nói… {p}%"; }),
-                new Progress<SubtitleLine>(line => { found.Add(line); SetLines(found, scroll: true); }),
-                cancel);
-            SetLines(lines);
-            var minutes = (DateTime.Now - started).TotalMinutes;
-            StageText.Text = $"Xong {lines.Count} dòng trong {(minutes < 1 ? $"{(DateTime.Now - started).TotalSeconds:0} giây" : $"{minutes:0.#} phút")}.";
-            if (lines.Count == 0) { Status("Không nhận ra lời nói tiếng Anh nào trong video."); return; }
-            var target = SrtPathFor(_mediaPath);
-            if (File.Exists(target)) Save_Click(sender, e);
-            else SaveTo(target);
+            if (queue) await RunQueueAsync(model, cancel);
+            else await RunOneAsync(model, _mediaPath!, cancel);
         }
         catch (OperationCanceledException)
         {
@@ -157,6 +226,89 @@ public partial class VideoView : System.Windows.Controls.UserControl
             _work = null;
             SetBusy(false);
         }
+    }
+
+    /// <summary>One video: recognised, then saved next to it (or where the learner chooses, if one exists).</summary>
+    private async Task RunOneAsync(SpeechModel model, string path, CancellationToken cancel)
+    {
+        var started = DateTime.Now;
+        var lines = await RecogniseAsync(model, path, "", null, cancel);
+        StageText.Text = $"Xong {lines.Count} dòng trong {Took(started)}.";
+        if (lines.Count == 0) { Status("Không nhận ra lời nói tiếng Anh nào trong video."); return; }
+        var target = SrtPathFor(path);
+        if (File.Exists(target)) Save_Click(this, new RoutedEventArgs());
+        else SaveTo(target);
+    }
+
+    /// <summary>
+    /// The queue: every video still to do, one after another (Whisper already uses every core). Each .srt is
+    /// saved next to its video; a video that fails is marked and the queue goes on. Cancelling stops it all.
+    /// </summary>
+    private async Task RunQueueAsync(SpeechModel model, CancellationToken cancel)
+    {
+        var todo = Pending;
+        var started = DateTime.Now;
+        int done = 0, failed = 0;
+        for (var n = 0; n < todo.Count; n++)
+        {
+            var item = todo[n];
+            QueueList.SelectedItem = item;
+            QueueList.ScrollIntoView(item);
+            _mediaPath = _videoPath = item.Path;
+            FileText.Text = item.Name;
+            PlanNameBox.Text = Path.GetFileNameWithoutExtension(item.Path);
+            item.Set("Đang tách âm thanh…", WorkInk);
+            var itemStarted = DateTime.Now;
+            try
+            {
+                var lines = await RecogniseAsync(model, item.Path, $"Video {n + 1}/{todo.Count} · ",
+                    p => item.Set($"Đang nhận dạng… {p}%", WorkInk), cancel);
+                if (lines.Count == 0)
+                {
+                    item.Set("Không nhận ra lời nói", ErrorInk);
+                    failed++;
+                    continue;
+                }
+                File.WriteAllText(SrtPathFor(item.Path), Subtitles.ToSrt(lines), new System.Text.UTF8Encoding(false));
+                item.Set($"Xong · {lines.Count} dòng · {Took(itemStarted)}", DoneInk);
+                done++;
+            }
+            catch (OperationCanceledException)
+            {
+                item.Set("Đã hủy", ErrorInk);
+                Status($"Đã dừng hàng đợi: xong {done}/{todo.Count} video.");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                item.Set("Lỗi: " + ex.Message, ErrorInk);
+                failed++;
+            }
+        }
+        StageText.Text = $"Xong hàng đợi trong {Took(started)}.";
+        Status($"Đã tạo phụ đề cho {done}/{todo.Count} video" + (failed > 0 ? $", {failed} video không tạo được (xem dòng màu đỏ)" : "")
+               + ". Các file .srt nằm cạnh từng video; bấm vào một video để xem phụ đề, phát video hoặc tìm từ mới.");
+    }
+
+    /// <summary>Recognises one file, showing the lines as they come; <paramref name="prefix"/> says which video of the queue.</summary>
+    private async Task<List<SubtitleLine>> RecogniseAsync(SpeechModel model, string path, string prefix, Action<int>? percent, CancellationToken cancel)
+    {
+        Progress.Value = 0;
+        SetLines([]);
+        var found = new List<SubtitleLine>();
+        var lines = await Transcriber.TranscribeAsync(_store.Folder, model, path,
+            new Progress<string>(text => StageText.Text = prefix + text),
+            new Progress<int>(p => { Progress.Value = p; StageText.Text = $"{prefix}Đang nhận dạng giọng nói… {p}%"; percent?.Invoke(p); }),
+            new Progress<SubtitleLine>(line => { found.Add(line); SetLines(found, scroll: true); }),
+            cancel);
+        SetLines(lines);
+        return lines;
+    }
+
+    private static string Took(DateTime started)
+    {
+        var took = DateTime.Now - started;
+        return took.TotalMinutes < 1 ? $"{took.TotalSeconds:0} giây" : $"{took.TotalMinutes:0.#} phút";
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => _work?.Cancel();
@@ -214,7 +366,7 @@ public partial class VideoView : System.Windows.Controls.UserControl
     {
         Progress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         CancelButton.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
-        PickButton.IsEnabled = ModelBox.IsEnabled = !busy;
+        PickButton.IsEnabled = ModelBox.IsEnabled = RedoBox.IsEnabled = !busy;
         UpdateButtons();
     }
 
@@ -222,7 +374,7 @@ public partial class VideoView : System.Windows.Controls.UserControl
     {
         var busy = _work is not null;
         var isMedia = _mediaPath is not null && !_mediaPath.EndsWith(".srt", StringComparison.OrdinalIgnoreCase);
-        RunButton.IsEnabled = isMedia && !busy;
+        RunButton.IsEnabled = !busy && (_queue.Count > 1 || isMedia);
         PlayVideoButton.IsEnabled = _videoPath is not null && !busy && _lines.Count > 0;
         SaveButton.IsEnabled = isMedia && !busy && _lines.Count > 0;
         OpenFolderButton.IsEnabled = _mediaPath is not null;
@@ -331,4 +483,11 @@ public partial class VideoView : System.Windows.Controls.UserControl
     }
 
     private void Status(string text) => StatusText.Text = text;
+
+    private static Brush Frozen(byte r, byte g, byte b)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
+        brush.Freeze();
+        return brush;
+    }
 }

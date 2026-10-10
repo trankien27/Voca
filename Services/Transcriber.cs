@@ -105,6 +105,19 @@ public static class Transcriber
     /// <summary>Writes the audio track as the 16 kHz mono 16-bit WAV Whisper needs.</summary>
     private static void ExtractAudio(string mediaPath, string wavPath, CancellationToken cancel)
     {
+        try
+        {
+            WriteWav(mediaPath, wavPath, cancel);
+        }
+        catch (System.Runtime.InteropServices.COMException ex)
+        {
+            // Media Foundation's own messages ("The media stream cannot process…") mean nothing to the learner.
+            throw new InvalidDataException("Không đọc được âm thanh của file này (file hỏng hoặc định dạng Windows không mở được).", ex);
+        }
+    }
+
+    private static void WriteWav(string mediaPath, string wavPath, CancellationToken cancel)
+    {
         using var reader = new MediaFoundationReader(mediaPath);
         using var resampler = new MediaFoundationResampler(reader, new WaveFormat(16000, 16, 1)) { ResamplerQuality = 60 };
         using var writer = new WaveFileWriter(wavPath, resampler.WaveFormat);
