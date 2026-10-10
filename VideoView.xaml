@@ -89,7 +89,15 @@
                     <StackPanel DockPanel.Dock="Top">
                         <TextBlock Style="{StaticResource Step}" Text="2 · Tạo bộ từ (tùy chọn)"/>
                         <TextBlock Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6"
-                                   Text="Những từ trong video chưa có trong thư viện (đã bỏ từ quá phổ biến và tên riêng). Tích các từ muốn học."/>
+                                   Text="Mỗi video một bộ từ riêng. Chỉ hiện từ chưa có trong thư viện, trong Từ của tôi hay trong bộ từ đang chờ của video khác (đã bỏ từ quá phổ biến và tên riêng). Tích các từ muốn học."/>
+                        <Border x:Name="SetPanel" Background="#F0EEFF" CornerRadius="8" Padding="10,6" Margin="0,0,0,6" Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock x:Name="SetStateText" FontSize="12" Foreground="{StaticResource Ink}" TextWrapping="Wrap"/>
+                                <Button x:Name="DropSetButton" Content="Bỏ bộ từ đang chờ" Click="DropSet_Click" HorizontalAlignment="Left"
+                                        Margin="-3,4,0,0" Padding="8,3" FontSize="12" Visibility="Collapsed"
+                                        ToolTip="Xóa bộ từ đang chờ AI của video này; các từ của nó lại được gợi ý cho mọi video"/>
+                            </StackPanel>
+                        </Border>
                         <WrapPanel Margin="-3,0,0,6">
                             <Button x:Name="FindWordsButton" Content="Tìm từ mới" Click="FindWords_Click" IsEnabled="False"/>
                             <Button x:Name="SelectAllButton" Content="Chọn tất cả" Click="SelectAll_Click" IsEnabled="False"/>
@@ -110,7 +118,7 @@
                             <Button Content="ChatGPT" Tag="https://chatgpt.com/" Click="OpenAi_Click"/>
                             <Button Content="Gemini" Tag="https://gemini.google.com/app" Click="OpenAi_Click"/>
                         </WrapPanel>
-                        <TextBox x:Name="AnswerBox" Height="90" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                        <TextBox x:Name="AnswerBox" Height="70" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
                                  Padding="4" FontFamily="Consolas" FontSize="11" ToolTip="Dán câu trả lời của AI vào đây"/>
                         <Button x:Name="ImportButton" Content="Nhập vào khóa học" Click="Import_Click" Margin="-3,6,0,0" HorizontalAlignment="Left"/>
                     </StackPanel>

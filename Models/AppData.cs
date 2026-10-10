@@ -30,6 +30,41 @@ public sealed class AppData
     public List<InboxWord> Inbox { get; set; } = [];
     /// <summary>The scheduled mistake day, if any; on that day it replaces the course lesson.</summary>
     public MistakeDay? MistakeDay { get; set; }
+    /// <summary>Word sets made from videos: picked and waiting for the AI's meanings, or already imported as a plan.</summary>
+    public List<VideoWordSet> VideoWordSets { get; set; } = [];
+}
+
+/// <summary>
+/// The words picked from one video. While <see cref="PlanId"/> is null the set waits for the AI's answer and
+/// its words count as taken (other videos do not offer them again); once imported it points to its plan.
+/// </summary>
+public sealed class VideoWordSet
+{
+    /// <summary>Fields written by a newer Voca; kept as they are so going back a version loses nothing.</summary>
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
+
+    public Guid Id { get; set; } = Guid.NewGuid();
+    /// <summary>Full path of the video (or of the .srt when no video was found next to it).</summary>
+    public string Video { get; set; } = "";
+    public string Name { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+    public int PerDay { get; set; } = 20;
+    public List<VideoWordEntry> Words { get; set; } = [];
+    public Guid? PlanId { get; set; }
+    public DateTime? ImportedAt { get; set; }
+
+    [JsonIgnore] public bool Pending => PlanId is null;
+}
+
+/// <summary>A word of a <see cref="VideoWordSet"/> with how often it is heard and its first line in the video.</summary>
+public sealed class VideoWordEntry
+{
+    /// <summary>Fields written by a newer Voca; kept as they are so going back a version loses nothing.</summary>
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
+
+    public string Text { get; set; } = "";
+    public int Count { get; set; }
+    public string Example { get; set; } = "";
 }
 
 public sealed class Settings

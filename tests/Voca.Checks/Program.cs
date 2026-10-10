@@ -670,5 +670,52 @@ Check(!marks.ContainsKey(learnedAlready.Text.ToLowerInvariant()) && !marks.Conta
 Check(marks["honestly"] == WordMark.New && marks["postponed"] == WordMark.New && marks["committee"] == WordMark.Waiting,
     "player: the video's new words are marked (any form); words saved to “Từ của tôi” show as waiting");
 
+// ---- one word set per video, no word offered twice ----
+var ws = new AppData();
+SeedData.EnsureSeeded(ws);
+var videoA = Path.Combine(Path.GetTempPath(), "voca-a.mp4");
+var videoB = Path.Combine(Path.GetTempPath(), "voca-b.mp4");
+List<SubtitleLine> Said(string text) => [new(TimeSpan.Zero, TimeSpan.FromSeconds(3), text)];
+var linesA = Said("The committee postponed the annual meeting. Honestly, the turbine stalled.");
+var linesB = Said("They postpone everything; the committee agreed, honestly. A turbine and a zeppelin.");
+var wordsA = Subtitles.NewWords(ws, linesA);
+var pickA = wordsA.Where(w => w.Text is "postponed" or "committee" or "turbine").ToList();
+var (savedA, takenA) = Subtitles.SaveWordSet(ws, videoA, "Video A", pickA, 20, d0);
+var setA = savedA!;
+Check(setA is { Pending: true } && setA.Words.Count == 3 && takenA.Count == 0 && ws.VideoWordSets.Single() == setA
+      && Subtitles.PendingSetFor(ws, videoA) == setA && Subtitles.PendingSetFor(ws, videoB) is null,
+    "word sets: the words picked from a video are saved as its own pending set");
+var wordsB = Subtitles.NewWords(ws, linesB).Select(w => w.Text).ToList();
+Check(!wordsB.Contains("postpone") && !wordsB.Contains("committee") && !wordsB.Contains("turbine") && wordsB.Contains("zeppelin") && wordsB.Contains("honestly"),
+    "word sets: another video does not offer words of a pending set again, in any form (postponed → postpone)");
+Check(Subtitles.NewWords(ws, linesA, setA).Select(w => w.Text).Intersect(["postponed", "committee", "turbine"]).Count() == 3,
+    "word sets: the video's own pending set is offered again when it is reopened");
+ws.Inbox.Add(new InboxWord { Text = "zeppelin", AddedAt = d0 });
+var (setB, takenB) = Subtitles.SaveWordSet(ws, videoB, "Video B", [new VideoWord("zeppelin", 1, ""), new VideoWord("honestly", 1, ""), new VideoWord("turbine", 1, "")], 20, d0);
+Check(setB is not null && setB != setA && setB.Words.Single().Text == "honestly" && takenB.Order().SequenceEqual(["turbine", "zeppelin"]),
+    "word sets: saving drops words taken meanwhile (Từ của tôi, another video's set) and names them");
+var (againA, _) = Subtitles.SaveWordSet(ws, videoA, "Video A", pickA.Take(2).ToList(), 20, d0.AddHours(1));
+Check(againA == setA && setA.Words.Count == 2 && ws.VideoWordSets.Count(s => s.Pending) == 2,
+    "word sets: saving a video again replaces its pending set (one per video)");
+var answerA = """
+    # Tên bộ từ: Video A
+    ## Ngày 1 — Họp
+    | STT | Từ | Phiên âm | Loại | Nghĩa | Ví dụ |
+    |---|---|---|---|---|---|
+    | 1 | postpone | /pəˈspəʊn/ | v | hoãn lại | They postponed it. |
+    | 2 | committee | /kəˈmɪti/ | n | ủy ban | The committee met. |
+    | 3 | honestly | /ˈɒnɪstli/ | adv | thật lòng | Honestly, no. |
+    """;
+var (readA, skippedA) = Subtitles.ReadPlan(ws, answerA, "Video A", 2, 20, setA);
+Check(readA.CanImport && readA.Plan!.Words.Select(w => w.Text).SequenceEqual(["postpone", "committee"]) && skippedA.SequenceEqual(["honestly"]),
+    "word sets: importing skips words that belong to another video's pending set");
+ws.Plans.Add(readA.Plan!);
+Subtitles.MarkImported(setA, readA.Plan!, d0.AddHours(2));
+Check(!setA.Pending && setA.PlanId == readA.Plan!.Id && Subtitles.PendingSetFor(ws, videoA) is null
+      && Subtitles.ImportedSetsFor(ws, videoA).Single() == setA && !Subtitles.NewWords(ws, linesB).Any(w => w.Text is "postpone" or "committee"),
+    "word sets: an imported set points to its plan, and its words stay taken through the library");
+Check(Subtitles.DropPendingSet(ws, setB) && !Subtitles.DropPendingSet(ws, setA) && Subtitles.NewWords(ws, linesB).Any(w => w.Text == "honestly"),
+    "word sets: dropping a pending set frees its words; an imported set cannot be dropped");
+
 Console.WriteLine(fails == 0 ? "\nALL PASSED" : $"\n{fails} FAILED");
 return fails == 0 ? 0 : 1;

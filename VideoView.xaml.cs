@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
+using Voca.Models;
 using Voca.Services;
 using Brush = System.Windows.Media.Brush;
 using Color = System.Windows.Media.Color;
@@ -12,7 +13,8 @@ namespace Voca;
 
 /// <summary>
 /// The "Phụ đề video" tab: recognises the speech of a video into an .srt saved next to it (or opens an .srt),
-/// then optionally turns the words not in the library into a new plan via the usual AI-chat prompt.
+/// then optionally turns the words not in the library into a new plan via the usual AI-chat prompt — one word
+/// set per video, saved as soon as its prompt is copied so other videos do not offer the same words.
 /// Several videos picked at once are subtitled one after another (a queue). Switching tabs leaves a
 /// recognition running; closing the library window cancels it.
 /// </summary>
@@ -22,6 +24,8 @@ public partial class VideoView : System.Windows.Controls.UserControl
     private string? _mediaPath;
     /// <summary>The video (or audio) to play with the subtitles: the file picked, or the one next to a picked .srt.</summary>
     private string? _videoPath;
+    /// <summary>What a word set is tied to: the video, or the .srt when no video sits next to it.</summary>
+    private string? Source => _videoPath ?? _mediaPath;
     private List<SubtitleLine> _lines = [];
     private List<WordRow> _words = [];
     private CancellationTokenSource? _work;
@@ -156,7 +160,57 @@ public partial class VideoView : System.Windows.Controls.UserControl
         {
             Status("Bấm “Tạo phụ đề”.");
         }
+        ShowWordSets(loadPending: true);
         UpdateButtons();
+    }
+
+    /// <summary>
+    /// Shows this video's word sets: one waiting for the AI (its words ticked, name and words per day restored
+    /// when <paramref name="loadPending"/>) and the ones already imported.
+    /// </summary>
+    private void ShowWordSets(bool loadPending)
+    {
+        var parts = new List<string>();
+        var pending = Source is null ? null : Subtitles.PendingSetFor(_store.Data, Source);
+        if (pending is not null)
+        {
+            parts.Add($"📌 Bộ từ “{pending.Name}” của video này đang chờ AI ({pending.Words.Count} từ, lưu {pending.CreatedAt:dd/MM HH:mm}). " +
+                      "Sao chép lại prompt nếu cần, rồi dán câu trả lời và bấm “Nhập vào khóa học”.");
+            if (loadPending && _lines.Count > 0)
+            {
+                PlanNameBox.Text = pending.Name;
+                PerDayBox.Text = pending.PerDay.ToString();
+                ListWords(pending);
+            }
+        }
+        if (Source is not null)
+            foreach (var done in Subtitles.ImportedSetsFor(_store.Data, Source))
+                parts.Add($"✓ Đã tạo bộ từ “{done.Name}” ({done.Words.Count} từ, {done.ImportedAt:dd/MM}) từ video này.");
+        var others = _store.Data.VideoWordSets.Count(s => s.Pending && s != pending);
+        if (others > 0) parts.Add($"Video khác có {others} bộ từ đang chờ AI — từ của chúng không được gợi ý lại ở đây.");
+        SetStateText.Text = string.Join("\n", parts);
+        SetPanel.Visibility = parts.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        DropSetButton.Visibility = pending is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void DropSet_Click(object sender, RoutedEventArgs e)
+    {
+        if (Source is null || Subtitles.PendingSetFor(_store.Data, Source) is not { } set) return;
+        _store.Update(d => Subtitles.DropPendingSet(d, set));
+        foreach (var row in _words) row.Picked = false;
+        WordsList.Items.Refresh();
+        ShowWordSets(loadPending: false);
+        UpdateButtons();
+        Status($"Đã bỏ bộ từ đang chờ “{set.Name}”; {set.Words.Count} từ của nó lại được gợi ý cho mọi video.");
+    }
+
+    /// <summary>The words of this video not taken elsewhere; those of its own pending set come ticked.</summary>
+    private void ListWords(VideoWordSet? pending)
+    {
+        var picked = pending?.Words.Select(w => w.Text.ToLowerInvariant()).ToHashSet() ?? [];
+        _words = Subtitles.NewWords(_store.Data, _lines, pending)
+            .Select(w => new WordRow(w) { Picked = picked.Contains(w.Text.ToLowerInvariant()) }).ToList();
+        WordsList.ItemsSource = _words;
     }
 
     private static readonly string[] VideoExtensions = [".mp4", ".m4v", ".mkv", ".mov", ".avi", ".wmv", ".webm", ".mp3", ".m4a", ".wav"];
@@ -387,12 +441,11 @@ public partial class VideoView : System.Windows.Controls.UserControl
 
     private void FindWords_Click(object sender, RoutedEventArgs e)
     {
-        _words = Subtitles.NewWords(_store.Data, _lines).Select(w => new WordRow(w)).ToList();
-        WordsList.ItemsSource = _words;
+        ListWords(Source is null ? null : Subtitles.PendingSetFor(_store.Data, Source));
         UpdateButtons();
         Status(_words.Count > 0
-            ? $"{_words.Count} từ chưa có trong thư viện, từ xuất hiện nhiều nhất ở trên. Tích các từ muốn học rồi sao chép prompt."
-            : "Mọi từ đáng học trong video đều đã có trong thư viện.");
+            ? $"{_words.Count} từ mới, từ xuất hiện nhiều nhất ở trên. Tích các từ muốn học rồi sao chép prompt (bộ từ được lưu riêng cho video này)."
+            : "Mọi từ đáng học trong video đều đã có trong thư viện, Từ của tôi hoặc bộ từ của video khác.");
     }
 
     private void SelectAll_Click(object sender, RoutedEventArgs e) => Pick(true);
@@ -427,15 +480,35 @@ public partial class VideoView : System.Windows.Controls.UserControl
     private int Days(int words) => Math.Max(1, (words + PerDay - 1) / PerDay);
     private List<VideoWord> PickedWords => _words.Where(w => w.Picked).Select(w => w.Word).ToList();
 
+    /// <summary>
+    /// Saves the ticked words as this video's word set (so no other video offers them again), then copies the
+    /// prompt for them. Words another video or the library took in the meantime are dropped and named.
+    /// </summary>
     private void CopyPrompt_Click(object sender, RoutedEventArgs e)
     {
-        var words = PickedWords;
-        if (words.Count == 0) return;
-        var prompt = Subtitles.BuildPrompt(PlanNameBox.Text.Trim(), words, PerDay);
+        var picked = PickedWords;
+        if (picked.Count == 0 || Source is null) return;
+        VideoWordSet? set = null;
+        List<string> taken = [];
+        _store.Update(d => (set, taken) = Subtitles.SaveWordSet(d, Source, PlanNameBox.Text, picked, PerDay, DateTime.Now));
+        if (taken.Count > 0)
+        {
+            _words.RemoveAll(w => taken.Contains(w.Text));
+            WordsList.Items.Refresh();
+        }
+        ShowWordSets(loadPending: false);
+        UpdateButtons();
+        var takenNote = taken.Count > 0 ? $" Bỏ {taken.Count} từ đã có ở nơi khác: {string.Join(", ", taken.Take(8))}." : "";
+        if (set is null)
+        {
+            Status("Không còn từ nào để tạo bộ từ." + takenNote);
+            return;
+        }
+        var prompt = Subtitles.BuildPrompt(set.Name, Subtitles.WordsOf(set), set.PerDay);
         try
         {
             System.Windows.Clipboard.SetText(prompt);
-            Status($"Đã sao chép prompt cho {words.Count} từ. Dán vào AI chat, rồi dán câu trả lời vào ô bên phải.");
+            Status($"Đã lưu bộ từ của video này ({set.Words.Count} từ) và sao chép prompt. Dán vào AI chat, rồi dán câu trả lời vào ô bên phải.{takenNote}");
         }
         catch (System.Runtime.InteropServices.COMException)
         {
@@ -457,7 +530,8 @@ public partial class VideoView : System.Windows.Controls.UserControl
     {
         var name = PlanNameBox.Text.Trim();
         if (name.Length == 0) { Status("Nhập tên bộ từ."); PlanNameBox.Focus(); return; }
-        var (read, skipped) = Subtitles.ReadPlan(_store.Data, AnswerBox.Text, name, Math.Max(1, PickedWords.Count), PerDay);
+        var set = Source is null ? null : Subtitles.PendingSetFor(_store.Data, Source);
+        var (read, skipped) = Subtitles.ReadPlan(_store.Data, AnswerBox.Text, name, Math.Max(1, set?.Words.Count ?? PickedWords.Count), PerDay, set);
         if (!read.CanImport)
         {
             Status("Chưa nhập được: " + string.Join(" ", read.Errors));
@@ -466,15 +540,20 @@ public partial class VideoView : System.Windows.Controls.UserControl
         var plan = read.Plan!;
         if (_store.Data.Plans.Any(p => string.Equals(p.Name.Trim(), plan.Name.Trim(), StringComparison.OrdinalIgnoreCase)))
             plan.Name = $"{plan.Name} ({DateTime.Now:dd/MM HH:mm})";
+        var picked = PickedWords;
         _store.Update(d =>
         {
             d.Plans.Add(plan);
             CourseEngine.AddToCourse(d, plan.Id);
+            // The set records which video the plan came from (also when the prompt was not copied from here).
+            if (set is null && Source is not null && picked.Count > 0) set = Subtitles.SaveWordSet(d, Source, plan.Name, picked, PerDay, DateTime.Now).Set;
+            if (set is not null) Subtitles.MarkImported(set, plan, DateTime.Now);
         });
         AnswerBox.Clear();
         var added = new HashSet<string>(plan.Words.Select(w => w.Text.Trim().ToLowerInvariant()));
         _words.RemoveAll(w => added.Contains(w.Text) || w.Picked);
         WordsList.Items.Refresh();
+        ShowWordSets(loadPending: false);
         UpdateButtons();
         var notes = string.Join(" ", read.Warnings.Take(2));
         Status($"Đã thêm “{plan.Name}” ({plan.DayCount} ngày, {plan.Words.Count} từ) vào cuối khóa học."

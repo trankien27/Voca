@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using Voca.Models;
@@ -17,7 +18,7 @@ public enum WordMark
     None,
     /// <summary>Worth learning and not in the library yet.</summary>
     New,
-    /// <summary>Saved to "Từ của tôi", waiting for its meaning.</summary>
+    /// <summary>Saved to "Từ của tôi" or to a video's word set, waiting for its meaning.</summary>
     Waiting,
     /// <summary>In the library and not marked learned.</summary>
     Learning
@@ -45,7 +46,9 @@ public sealed class WordMarker
             // A word learned in one plan and still studied in another counts as being studied.
             if (!_library.TryGetValue(key, out var seen) || (seen.Learned && !word.Learned)) _library[key] = word;
         }
-        _waiting = data.Inbox.Select(i => i.Text.Trim().ToLowerInvariant()).ToHashSet();
+        _waiting = data.Inbox.Select(i => i.Text.Trim().ToLowerInvariant())
+            .Concat(data.VideoWordSets.Where(s => s.Pending).SelectMany(s => s.Words).Select(w => w.Text.Trim().ToLowerInvariant()))
+            .ToHashSet();
         _new = newWords.Select(w => w.Text.ToLowerInvariant()).ToHashSet();
     }
 
@@ -157,14 +160,16 @@ public static partial class Subtitles
     // ---------- words to learn ----------
 
     /// <summary>
-    /// Words of the subtitles not in the library (any plan, under any simple form: delays/delayed/delaying
-    /// ↔ delay), leaving out very common words, names (only ever capitalised mid-sentence), contractions and
-    /// words shorter than <see cref="MinWordLength"/>. Forms of one word are counted together under the form
-    /// heard most. Most frequent first, then in order of appearance.
+    /// Words of the subtitles not taken yet (<see cref="TakenWords"/>: library, "Từ của tôi", other videos'
+    /// pending word sets — under any simple form: delays/delayed/delaying ↔ delay), leaving out very common
+    /// words, names (only ever capitalised mid-sentence), contractions and words shorter than
+    /// <see cref="MinWordLength"/>. Forms of one word are counted together under the form heard most. Most
+    /// frequent first, then in order of appearance. <paramref name="except"/> is this video's own pending set,
+    /// whose words are offered again.
     /// </summary>
-    public static List<VideoWord> NewWords(AppData data, IReadOnlyList<SubtitleLine> lines)
+    public static List<VideoWord> NewWords(AppData data, IReadOnlyList<SubtitleLine> lines, VideoWordSet? except = null)
     {
-        var known = data.Plans.SelectMany(p => p.Words).Select(w => w.Text.Trim().ToLowerInvariant()).ToHashSet();
+        var known = TakenWords(data, except);
         var seen = new Dictionary<string, (int Count, int First, string Example, bool Lower, bool CapitalMid)>();
         var order = 0;
         foreach (var line in lines)
@@ -206,6 +211,90 @@ public static partial class Subtitles
         }
         return result.OrderByDescending(r => r.Word.Count).ThenBy(r => r.First).Select(r => r.Word).ToList();
     }
+
+    // ---------- word sets per video ----------
+
+    /// <summary>
+    /// Words that must not be offered again, with their simple forms: every library word, words waiting in
+    /// "Từ của tôi" and the words of pending video word sets (except <paramref name="except"/>).
+    /// </summary>
+    public static HashSet<string> TakenWords(AppData data, VideoWordSet? except = null)
+    {
+        var taken = new HashSet<string>();
+        void Add(string text)
+        {
+            var key = text.Trim().ToLowerInvariant();
+            if (key.Length == 0) return;
+            taken.Add(key);
+            foreach (var form in BaseForms(key)) taken.Add(form);
+        }
+        foreach (var word in data.Plans.SelectMany(p => p.Words)) Add(word.Text);
+        foreach (var waiting in data.Inbox) Add(waiting.Text);
+        foreach (var set in data.VideoWordSets.Where(s => s.Pending && s != except))
+            foreach (var word in set.Words) Add(word.Text);
+        return taken;
+    }
+
+    private static bool IsTaken(string text, HashSet<string> taken)
+    {
+        var key = text.Trim().ToLowerInvariant();
+        return taken.Contains(key) || BaseForms(key).Any(taken.Contains);
+    }
+
+    private static bool SameVideo(string a, string b) =>
+        string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The word set of <paramref name="video"/> still waiting for the AI's answer, if any.</summary>
+    public static VideoWordSet? PendingSetFor(AppData data, string video) =>
+        data.VideoWordSets.FirstOrDefault(s => s.Pending && SameVideo(s.Video, video));
+
+    /// <summary>Word sets of <paramref name="video"/> already imported as plans, newest first.</summary>
+    public static List<VideoWordSet> ImportedSetsFor(AppData data, string video) =>
+        data.VideoWordSets.Where(s => !s.Pending && SameVideo(s.Video, video)).OrderByDescending(s => s.ImportedAt).ToList();
+
+    /// <summary>
+    /// Saves the words picked from one video as its pending set (replacing that video's earlier pending set), so
+    /// other videos no longer offer them. Words taken in the meantime (library, "Từ của tôi", another video's
+    /// pending set) are left out and returned. Returns a null set when nothing is left to save.
+    /// </summary>
+    public static (VideoWordSet? Set, List<string> Taken) SaveWordSet(AppData data, string video, string name,
+        IReadOnlyList<VideoWord> words, int perDay, DateTime now)
+    {
+        var set = PendingSetFor(data, video);
+        var taken = TakenWords(data, set);
+        var duplicates = words.Where(w => IsTaken(w.Text, taken)).Select(w => w.Text).ToList();
+        var keep = words.Where(w => !duplicates.Contains(w.Text))
+            .DistinctBy(w => w.Text.ToLowerInvariant())
+            .Select(w => new VideoWordEntry { Text = w.Text, Count = w.Count, Example = w.Example }).ToList();
+        if (keep.Count == 0)
+        {
+            if (set is not null) data.VideoWordSets.Remove(set);
+            return (null, duplicates);
+        }
+        if (set is null)
+        {
+            set = new VideoWordSet { Video = Path.GetFullPath(video) };
+            data.VideoWordSets.Add(set);
+        }
+        set.Name = name.Trim();
+        set.PerDay = perDay;
+        set.CreatedAt = now;
+        set.Words = keep;
+        return (set, duplicates);
+    }
+
+    public static List<VideoWord> WordsOf(VideoWordSet set) => set.Words.Select(w => new VideoWord(w.Text, w.Count, w.Example)).ToList();
+
+    /// <summary>The pending set became <paramref name="plan"/>: its words are now in the library.</summary>
+    public static void MarkImported(VideoWordSet set, Plan plan, DateTime now)
+    {
+        set.PlanId = plan.Id;
+        set.Name = plan.Name;
+        set.ImportedAt = now;
+    }
+
+    /// <summary>Drops a pending set; its words become free again for every video.</summary>
+    public static bool DropPendingSet(AppData data, VideoWordSet set) => set.Pending && data.VideoWordSets.Remove(set);
 
     /// <summary>Possible base forms of an inflected word (delays → delay, studied → study, stopped → stop, making → make).</summary>
     public static IEnumerable<string> BaseForms(string word)
@@ -280,19 +369,26 @@ public static partial class Subtitles
     }
 
     /// <summary>
-    /// Reads the AI's answer for <see cref="BuildPrompt"/> into a new plan (not stored yet). Words that are
-    /// already in the library — the AI may have turned a form into a word that is — are left out and listed.
+    /// Reads the AI's answer for <see cref="BuildPrompt"/> into a new plan (not stored yet). Words already in the
+    /// library or in another video's pending set — the AI may have turned a form into a word that is — are left
+    /// out and listed. <paramref name="set"/> is the video's own pending set (its words are of course allowed).
     /// </summary>
-    public static (FormReadResult Read, List<string> Skipped) ReadPlan(AppData data, string answer, string name, int wordCount, int perDay)
+    public static (FormReadResult Read, List<string> Skipped) ReadPlan(AppData data, string answer, string name, int wordCount, int perDay,
+        VideoWordSet? set = null)
     {
         var days = Math.Max(1, (wordCount + perDay - 1) / perDay);
         var read = PlanFormat.Read(answer, new PlanRequest(name, days, perDay, "", "", name));
         var skipped = new List<string>();
         if (read.Plan is { } plan)
         {
-            skipped = plan.Words.Where(w => QuickAdd.FindInLibrary(data, w.Text) is not null).Select(w => w.Text).ToList();
+            var otherSets = new HashSet<string>();
+            foreach (var other in data.VideoWordSets.Where(s => s.Pending && s != set))
+                foreach (var word in other.Words) otherSets.Add(word.Text.Trim().ToLowerInvariant());
+            skipped = plan.Words
+                .Where(w => QuickAdd.FindInLibrary(data, w.Text) is not null || otherSets.Contains(w.Text.Trim().ToLowerInvariant()))
+                .Select(w => w.Text).ToList();
             plan.Words.RemoveAll(w => skipped.Contains(w.Text));
-            if (plan.Words.Count == 0 && read.Errors.Count == 0) read.Errors.Add("Mọi từ trong câu trả lời đều đã có trong thư viện.");
+            if (plan.Words.Count == 0 && read.Errors.Count == 0) read.Errors.Add("Mọi từ trong câu trả lời đều đã có trong thư viện hoặc trong bộ từ của video khác.");
         }
         return (read, skipped);
     }
