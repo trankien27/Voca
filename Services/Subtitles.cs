@@ -11,6 +11,57 @@ public sealed record SubtitleLine(TimeSpan Start, TimeSpan End, string Text);
 /// <summary>A word heard in a video that is not in the library yet: how often, and the first line it is in.</summary>
 public sealed record VideoWord(string Text, int Count, string Example);
 
+/// <summary>How a word of a subtitle is shown while the video plays.</summary>
+public enum WordMark
+{
+    None,
+    /// <summary>Worth learning and not in the library yet.</summary>
+    New,
+    /// <summary>Saved to "Từ của tôi", waiting for its meaning.</summary>
+    Waiting,
+    /// <summary>In the library and not marked learned.</summary>
+    Learning
+}
+
+/// <summary>A piece of a subtitle line; <see cref="Word"/> is the library word for <see cref="WordMark.Learning"/>.</summary>
+public sealed record SubtitlePart(string Text, WordMark Mark, Word? Word = null);
+
+/// <summary>
+/// Decides the mark of each word of a video's subtitles: library words being learned (any simple form),
+/// words waiting in "Từ của tôi", and the video's new words (<see cref="Subtitles.NewWords"/>, so common
+/// words and names stay plain).
+/// </summary>
+public sealed class WordMarker
+{
+    private readonly Dictionary<string, Word> _library = [];
+    private readonly HashSet<string> _waiting;
+    private readonly HashSet<string> _new;
+
+    public WordMarker(AppData data, IEnumerable<VideoWord> newWords)
+    {
+        foreach (var word in data.Plans.SelectMany(p => p.Words))
+        {
+            var key = word.Text.Trim().ToLowerInvariant();
+            // A word learned in one plan and still studied in another counts as being studied.
+            if (!_library.TryGetValue(key, out var seen) || (seen.Learned && !word.Learned)) _library[key] = word;
+        }
+        _waiting = data.Inbox.Select(i => i.Text.Trim().ToLowerInvariant()).ToHashSet();
+        _new = newWords.Select(w => w.Text.ToLowerInvariant()).ToHashSet();
+    }
+
+    public (WordMark Mark, Word? Word) Of(string token)
+    {
+        var key = token.Replace('’', '\'').ToLowerInvariant();
+        if (key.EndsWith("'s")) key = key[..^2];
+        string[] forms = [key, .. Subtitles.BaseForms(key)];
+        foreach (var form in forms)
+            if (_library.TryGetValue(form, out var word))
+                return word.Learned ? (WordMark.None, null) : (WordMark.Learning, word);
+        if (forms.Any(_waiting.Contains)) return (WordMark.Waiting, null);
+        return forms.Any(_new.Contains) ? (WordMark.New, null) : (WordMark.None, null);
+    }
+}
+
 /// <summary>
 /// Subtitles as plain data: writing and reading .srt, and picking the words of a video worth learning — not
 /// in the library under any form, not among the most common English words, not a name.
@@ -66,6 +117,42 @@ public static partial class Subtitles
         lines.Select(l => l with { Text = Whitespace().Replace(SoundTag().Replace(l.Text, " "), " ").Trim() })
              .Where(l => l.Text.Any(char.IsLetter))
              .ToList();
+
+    // ---------- playing ----------
+
+    /// <summary>The line on screen at <paramref name="time"/> (lines in time order), or null between lines.</summary>
+    public static SubtitleLine? LineAt(IReadOnlyList<SubtitleLine> lines, TimeSpan time)
+    {
+        int lo = 0, hi = lines.Count - 1;
+        while (lo <= hi)
+        {
+            var mid = (lo + hi) / 2;
+            if (lines[mid].Start <= time) lo = mid + 1;
+            else hi = mid - 1;
+        }
+        return hi >= 0 && time < lines[hi].End ? lines[hi] : null;
+    }
+
+    /// <summary>Splits a line into plain text and marked words, keeping spaces and punctuation as they are.</summary>
+    public static List<SubtitlePart> Mark(string text, WordMarker marker)
+    {
+        var parts = new List<SubtitlePart>();
+        var plain = new StringBuilder();
+        var at = 0;
+        foreach (Match m in Token().Matches(text))
+        {
+            var (mark, word) = marker.Of(m.Value);
+            if (mark == WordMark.None) continue;
+            plain.Append(text, at, m.Index - at);
+            if (plain.Length > 0) parts.Add(new SubtitlePart(plain.ToString(), WordMark.None));
+            plain.Clear();
+            parts.Add(new SubtitlePart(m.Value, mark, word));
+            at = m.Index + m.Length;
+        }
+        plain.Append(text, at, text.Length - at);
+        if (plain.Length > 0) parts.Add(new SubtitlePart(plain.ToString(), WordMark.None));
+        return parts;
+    }
 
     // ---------- words to learn ----------
 

@@ -14,6 +14,8 @@ public partial class VideoView : System.Windows.Controls.UserControl
 {
     private readonly Store _store;
     private string? _mediaPath;
+    /// <summary>The video (or audio) to play with the subtitles: the file picked, or the one next to a picked .srt.</summary>
+    private string? _videoPath;
     private List<SubtitleLine> _lines = [];
     private List<WordRow> _words = [];
     private CancellationTokenSource? _work;
@@ -59,23 +61,40 @@ public partial class VideoView : System.Windows.Controls.UserControl
         FileText.Text = Path.GetFileName(_mediaPath);
         PlanNameBox.Text = Path.GetFileNameWithoutExtension(_mediaPath);
         SetLines([]);
-        if (_mediaPath.EndsWith(".srt", StringComparison.OrdinalIgnoreCase))
+        var isSrt = _mediaPath.EndsWith(".srt", StringComparison.OrdinalIgnoreCase);
+        _videoPath = isSrt ? VideoNextTo(_mediaPath) : _mediaPath;
+        var srt = isSrt ? _mediaPath : SrtPathFor(_mediaPath);
+        if (File.Exists(srt))
         {
             try
             {
-                SetLines(Subtitles.ReadSrt(File.ReadAllText(_mediaPath)));
-                Status(_lines.Count > 0 ? $"Đã mở {_lines.Count} dòng phụ đề. Bấm “Tìm từ mới” để tạo bộ từ." : "File .srt không có dòng phụ đề nào.");
+                SetLines(Subtitles.ReadSrt(File.ReadAllText(srt)));
+                Status(_lines.Count == 0 ? "File .srt không có dòng phụ đề nào."
+                    : isSrt && _videoPath is null ? $"Đã mở {_lines.Count} dòng phụ đề (không thấy video cùng tên bên cạnh để phát). Bấm “Tìm từ mới” để tạo bộ từ."
+                    : isSrt ? $"Đã mở {_lines.Count} dòng phụ đề của {Path.GetFileName(_videoPath)}. Bấm “▶ Xem video có phụ đề” hoặc “Tìm từ mới”."
+                    : $"Đã mở phụ đề có sẵn {Path.GetFileName(srt)} ({_lines.Count} dòng). Bấm “▶ Xem video có phụ đề”, hoặc “Tạo phụ đề” để tạo lại.");
             }
             catch (IOException ex) { Status($"Không đọc được file: {ex.Message}"); }
         }
         else
         {
-            var existing = SrtPathFor(_mediaPath);
-            Status(File.Exists(existing)
-                ? $"Video đã có phụ đề {Path.GetFileName(existing)}; tạo lại sẽ hỏi nơi lưu để không ghi đè."
-                : "Bấm “Tạo phụ đề”.");
+            Status("Bấm “Tạo phụ đề”.");
         }
         UpdateButtons();
+    }
+
+    private static readonly string[] VideoExtensions = [".mp4", ".m4v", ".mkv", ".mov", ".avi", ".wmv", ".webm", ".mp3", ".m4a", ".wav"];
+
+    /// <summary>The video with the same name as a subtitle file, if one sits next to it.</summary>
+    private static string? VideoNextTo(string srt) =>
+        VideoExtensions.Select(ext => Path.ChangeExtension(srt, ext)).FirstOrDefault(File.Exists);
+
+    /// <summary>Plays the video with the subtitles; new words of the video and words being learned stand out.</summary>
+    private void PlayVideo_Click(object sender, RoutedEventArgs e)
+    {
+        if (_videoPath is null || _lines.Count == 0) return;
+        var newWords = Subtitles.NewWords(_store.Data, _lines);
+        new VideoPlayerWindow(_store, _videoPath, _lines, newWords).Show();
     }
 
     private void ModelBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
@@ -204,6 +223,7 @@ public partial class VideoView : System.Windows.Controls.UserControl
         var busy = _work is not null;
         var isMedia = _mediaPath is not null && !_mediaPath.EndsWith(".srt", StringComparison.OrdinalIgnoreCase);
         RunButton.IsEnabled = isMedia && !busy;
+        PlayVideoButton.IsEnabled = _videoPath is not null && !busy && _lines.Count > 0;
         SaveButton.IsEnabled = isMedia && !busy && _lines.Count > 0;
         OpenFolderButton.IsEnabled = _mediaPath is not null;
         FindWordsButton.IsEnabled = !busy && _lines.Count > 0;

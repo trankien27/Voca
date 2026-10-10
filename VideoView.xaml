@@ -42,6 +42,8 @@
                             <Button x:Name="CancelButton" Content="Hủy" Click="Cancel_Click" Visibility="Collapsed"/>
                             <Button x:Name="SaveButton" Content="Lưu .srt…" Click="Save_Click" IsEnabled="False"/>
                             <Button x:Name="OpenFolderButton" Content="Mở thư mục" Click="OpenFolder_Click" IsEnabled="False"/>
+                            <Button x:Name="PlayVideoButton" Content="▶ Xem video có phụ đề" Click="PlayVideo_Click" IsEnabled="False"
+                                    ToolTip="Phát video kèm phụ đề; từ mới tô vàng (bấm để lưu), từ đang học tô tím (rê chuột xem nghĩa)"/>
                         </WrapPanel>
                         <ProgressBar x:Name="Progress" Height="6" Maximum="100" Visibility="Collapsed" Margin="0,0,0,4"
                                      Foreground="{StaticResource Accent}" Background="#ECEAF8" BorderThickness="0"/>

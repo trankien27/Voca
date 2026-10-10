@@ -1,0 +1,70 @@
+<Window x:Class="Voca.VideoPlayerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Voca · Xem video" Width="1040" Height="660" MinWidth="560" MinHeight="360"
+        WindowStartupLocation="CenterScreen" Background="Black"
+        PreviewKeyDown="Window_PreviewKeyDown" Closed="Window_Closed" SizeChanged="Window_SizeChanged">
+    <Window.Resources>
+        <Style x:Key="Control" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="#2A2A36"/>
+            <Setter Property="Foreground" Value="#F2F2F7"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="MinWidth" Value="38"/>
+        </Style>
+    </Window.Resources>
+    <Grid>
+        <Grid.RowDefinitions><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+
+        <!-- video with the subtitle on top -->
+        <Grid x:Name="Stage" Background="Black" MouseLeftButtonUp="Stage_Click">
+            <MediaElement x:Name="Media" LoadedBehavior="Manual" UnloadedBehavior="Close" Stretch="Uniform"
+                          MediaOpened="Media_Opened" MediaEnded="Media_Ended" MediaFailed="Media_Failed"/>
+            <Border x:Name="SubtitlePanel" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="40,0,40,28"
+                    Background="#B3000000" CornerRadius="8" Padding="16,8" Visibility="Collapsed"
+                    MouseEnter="Subtitle_MouseEnter" MouseLeave="Subtitle_MouseLeave" MouseLeftButtonUp="Subtitle_Click">
+                <TextBlock x:Name="SubtitleText" Foreground="White" FontSize="26" TextWrapping="Wrap" TextAlignment="Center">
+                    <TextBlock.Effect><DropShadowEffect Color="Black" BlurRadius="4" ShadowDepth="1" Opacity="0.9"/></TextBlock.Effect>
+                </TextBlock>
+            </Border>
+            <!-- legend -->
+            <Border VerticalAlignment="Top" HorizontalAlignment="Right" Margin="0,12,12,0" Background="#99000000" CornerRadius="8" Padding="10,5"
+                    IsHitTestVisible="False">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="■ từ mới" Foreground="#FFC94D" FontWeight="Bold" FontSize="12" Margin="0,0,10,0"/>
+                    <TextBlock Text="■ đang học" Foreground="#B9AEFF" FontWeight="Bold" FontSize="12" Margin="0,0,10,0"/>
+                    <TextBlock Text="■ đã lưu" Foreground="#7EE2A8" FontWeight="Bold" FontSize="12"/>
+                </StackPanel>
+            </Border>
+            <Border x:Name="Toast" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,12,0,0" Background="#E6172033" CornerRadius="8"
+                    Padding="14,7" Visibility="Collapsed" IsHitTestVisible="False">
+                <TextBlock x:Name="ToastText" Foreground="White" FontSize="13" TextWrapping="Wrap" MaxWidth="520"/>
+            </Border>
+        </Grid>
+
+        <!-- controls -->
+        <Border x:Name="ControlBar" Grid.Row="1" Background="#16161D" Padding="10,8">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                    <Button x:Name="PlayButton" Style="{StaticResource Control}" Content="▶" Click="Play_Click" ToolTip="Phát / dừng (Space)"/>
+                    <Button Style="{StaticResource Control}" Content="⟲ 5s" Click="Back_Click" ToolTip="Lùi 5 giây (←)"/>
+                    <Button Style="{StaticResource Control}" Content="⏮ câu" Click="PreviousLine_Click" ToolTip="Nghe lại câu trước"/>
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <TextBlock x:Name="TimeText" Foreground="#C9C9D6" FontFamily="Consolas" FontSize="12" VerticalAlignment="Center" Margin="10,0,10,0" Text="0:00 / 0:00"/>
+                    <ComboBox x:Name="SpeedBox" Width="70" VerticalAlignment="Center" SelectionChanged="Speed_Changed" ToolTip="Tốc độ phát">
+                        <ComboBoxItem Content="0.5×" Tag="0.5"/>
+                        <ComboBoxItem Content="0.75×" Tag="0.75"/>
+                        <ComboBoxItem Content="1×" Tag="1" IsSelected="True"/>
+                        <ComboBoxItem Content="1.25×" Tag="1.25"/>
+                        <ComboBoxItem Content="1.5×" Tag="1.5"/>
+                    </ComboBox>
+                    <ToggleButton x:Name="SubtitleToggle" Content="CC" IsChecked="True" Margin="6,0,0,0" Padding="8,5" Click="SubtitleToggle_Click"
+                                  ToolTip="Bật / tắt phụ đề (C)"/>
+                    <Button Style="{StaticResource Control}" Content="⛶" Click="FullScreen_Click" ToolTip="Toàn màn hình (F, Esc để thoát)"/>
+                </StackPanel>
+                <Slider x:Name="Seek" VerticalAlignment="Center" Margin="10,0,0,0" IsMoveToPointEnabled="True" Minimum="0" Maximum="1"
+                        PreviewMouseLeftButtonDown="Seek_MouseDown" PreviewMouseLeftButtonUp="Seek_MouseUp"/>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

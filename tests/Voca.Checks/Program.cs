@@ -648,5 +648,27 @@ var (videoRead, videoSkipped) = Subtitles.ReadPlan(vw, videoAnswer, "Bài nói",
 Check(videoRead.CanImport && videoRead.Plan!.Words.Single().Text == "postpone" && videoSkipped.SequenceEqual(["delay"]),
     "subtitles: words of the AI answer already in the library are skipped");
 
+// ---- playing a video with its subtitles ----
+Check(Subtitles.LineAt(cleanSubs, TimeSpan.FromSeconds(2)) == cleanSubs[0] && Subtitles.LineAt(cleanSubs, TimeSpan.FromSeconds(5)) is null
+      && Subtitles.LineAt(cleanSubs, TimeSpan.FromMinutes(61.05)) == cleanSubs[1] && Subtitles.LineAt(cleanSubs, TimeSpan.Zero) is null
+      && Subtitles.LineAt(cleanSubs, TimeSpan.FromMinutes(62.1)) is null,
+    "player: the line on screen at a time, none between lines or after the end");
+var studying = vw.Plans[0].Words[0];
+var learnedAlready = vw.Plans[0].Words[1];
+learnedAlready.Learned = true;
+vw.Inbox.Add(new InboxWord { Text = "committee", AddedAt = d0 });
+var marker = new WordMarker(vw, videoWords);
+var marked = Subtitles.Mark($"Delays, the {studying.Text}s and {learnedAlready.Text}: honestly the committee postponed it.", marker);
+Check(string.Concat(marked.Select(p => p.Text)) == $"Delays, the {studying.Text}s and {learnedAlready.Text}: honestly the committee postponed it.",
+    "player: marking keeps the line's text, spaces and punctuation");
+var marks = marked.Where(p => p.Mark != WordMark.None).ToDictionary(p => p.Text.ToLowerInvariant(), p => p.Mark);
+Check(marks["delays"] == WordMark.Learning && marks[studying.Text.ToLowerInvariant() + "s"] == WordMark.Learning
+      && marked.Single(p => p.Text == studying.Text + "s").Word == studying,
+    "player: library words being learned are marked, in any simple form, with the word for its meaning");
+Check(!marks.ContainsKey(learnedAlready.Text.ToLowerInvariant()) && !marks.ContainsKey("the") && !marks.ContainsKey("it"),
+    "player: learned and common words stay plain");
+Check(marks["honestly"] == WordMark.New && marks["postponed"] == WordMark.New && marks["committee"] == WordMark.Waiting,
+    "player: the video's new words are marked (any form); words saved to “Từ của tôi” show as waiting");
+
 Console.WriteLine(fails == 0 ? "\nALL PASSED" : $"\n{fails} FAILED");
 return fails == 0 ? 0 : 1;
