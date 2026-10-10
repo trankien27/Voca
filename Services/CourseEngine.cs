@@ -52,20 +52,9 @@ public static class CourseEngine
     /// <summary>Words introduced on the current day of the current plan, without those marked learned.</summary>
     public static List<Word> NewWords(AppData data) => DayWords(data).Where(w => !w.Learned).ToList();
 
-    /// <summary>
-    /// When every word of today's course day is marked learned there is nothing to study: the day counts
-    /// as done (tomorrow moves on). Returns true when it changed the position.
-    /// </summary>
-    public static bool CompleteIfAllLearned(AppData data, DateTime today)
-    {
-        var day = DayWords(data);
-        if (day.Count == 0 || day.Any(w => !w.Learned) || data.Position.DayCompleted) return false;
-        if (MistakeDays.Active(data, today) is { Done: false }) return false;
-        data.Position.DayCompleted = true;
-        data.Position.DayCompletedOn = today.Date;
-        return true;
-    }
-
+    /// <summary>Every word of the given day of <paramref name="plan"/> is marked "Đã thuộc" (a day without words counts too).</summary>
+    public static bool IsDayLearned(Plan plan, int day) =>
+        plan.Words.Count > 0 && plan.Words.Where(w => w.Day == day).All(w => w.Learned);
 
     /// <summary>
     /// Today's words: the current day's new words (or, on a mistake day, its wrong words instead), then
@@ -85,7 +74,7 @@ public static class CourseEngine
         return [.. newWords, .. reviews];
     }
 
-    public static void SetPosition(AppData data, Guid planId, int day, DateTime? today = null)
+    public static void SetPosition(AppData data, Guid planId, int day)
     {
         var plan = data.Plans.First(p => p.Id == planId);
         if (!data.Course.Contains(planId)) data.Course.Add(planId);
@@ -93,7 +82,6 @@ public static class CourseEngine
         data.Position.Day = Math.Clamp(day, 1, Math.Max(1, plan.DayCount));
         data.Position.DayCompleted = false;
         data.Position.DayCompletedOn = null;
-        data.Position.DayStartedOn = (today ?? DateTime.Today).Date;
         data.Position.Finished = false;
     }
 
@@ -111,80 +99,74 @@ public static class CourseEngine
     }
 
     /// <summary>
-    /// Moves to the next day on each new calendar day, whether or not the day's session was done — at most
-    /// one day per date the app is opened, so days away are not piled up. Words of an unfinished day that were
-    /// never answered go into reviews (due today) instead of being lost. A mistake day pauses the course:
-    /// nothing moves that date, and a course day whose own date was taken by a mistake day gets today instead.
-    /// Crossing the end of a plan moves to the next plan in the course and queues its summary. Returns true
-    /// when the position changed.
+    /// The course moves on only when every word of the current day is marked "Đã thuộc" — right away, not on
+    /// the next date. A day not fully learned stays however many dates pass (its words keep coming back); on a
+    /// new date only "today's session was done" is cleared. Fully learned days in a row are all passed;
+    /// crossing the end of a plan moves to the next plan in the course and queues its summary. A plan without
+    /// words holds the course. Returns true when the position changed.
     /// </summary>
     public static bool Advance(AppData data, DateTime today)
     {
-        today = today.Date;
         var position = data.Position;
-        if (Current(data) is not var (plan, index) || position.Finished) return false;
-        if (MistakeDays.Active(data, today) is not null)
+        var changed = false;
+        if (position.DayCompleted && (position.DayCompletedOn is not DateTime done || done.Date < today.Date))
         {
-            var changed = position.PausedOn?.Date != today;
-            position.PausedOn = today;
-            return changed;
+            position.DayCompleted = false;
+            position.DayCompletedOn = null;
+            changed = true;
         }
-
-        var started = (position.DayStartedOn ?? InferDayStart(data, today)).Date;
-        if (started >= today)
+        while (!position.Finished && Current(data) is var (plan, index) && IsDayLearned(plan, position.Day))
         {
-            var changed = position.DayStartedOn?.Date != started;
-            position.DayStartedOn = started;
-            return changed;
+            MoveToNextDay(data, plan, index);
+            changed = true;
         }
-        if (position.PausedOn?.Date == started)
-        {
-            // The day's own date went to a mistake day: it is studied today instead of being skipped.
-            position.DayStartedOn = today;
-            return true;
-        }
-
-        MoveToNextDay(data, plan, index, today, started);
-        return true;
+        return changed;
     }
 
     /// <summary>
-    /// "Học tiếp ngày sau" when today's words are done: moves to the next day right away instead of waiting
-    /// for tomorrow (tomorrow then moves on again as usual). Not during a mistake day or after the course.
+    /// The latest earlier day of the current plan with words never studied (not answered, not learned) — left
+    /// by older versions, which moved on each new date — to offer "Học bù". Null when every earlier day was studied.
     /// </summary>
-    public static bool StudyNextDayNow(AppData data, DateTime today)
+    public static (int Day, List<Word> Words)? SkippedDay(AppData data)
     {
-        today = today.Date;
-        if (Current(data) is not var (plan, index) || data.Position.Finished) return false;
-        if (MistakeDays.Active(data, today) is not null) return false;
-        MoveToNextDay(data, plan, index, today, (data.Position.DayStartedOn ?? today).Date);
-        return true;
-    }
-
-    /// <summary>The plan and day that come after the current one (null at the end of the course).</summary>
-    public static (Plan Plan, int Day)? NextDay(AppData data)
-    {
-        if (Current(data) is not var (plan, index) || data.Position.Finished) return null;
-        if (data.Position.Day < plan.DayCount) return (plan, data.Position.Day + 1);
-        var next = data.Course.Skip(index + 1).Select(id => data.Plans.FirstOrDefault(p => p.Id == id)).OfType<Plan>().FirstOrDefault();
-        return next is null ? null : (next, 1);
+        if (Current(data) is not var (plan, _)) return null;
+        var lastDay = data.Position.Finished ? plan.DayCount : data.Position.Day - 1;
+        for (var day = lastDay; day >= 1; day--)
+        {
+            var words = plan.Words.Where(w => w.Day == day && !w.Learned && w.Review is null).ToList();
+            if (words.Count > 0) return (day, words);
+        }
+        return null;
     }
 
     /// <summary>
-    /// Leaves the current day for the next one. Words of the day that were never answered go into reviews so
-    /// they are not lost; past the last day the next plan starts (its summary queued) or the course ends.
+    /// Repairs data from 2.8.1–2.8.2, which put the words of a skipped day into reviews without them ever being
+    /// answered: those words leave the reviews again. Words saved in "Từ của tôi" keep their reviews.
+    /// Returns true when something changed.
     /// </summary>
-    private static void MoveToNextDay(AppData data, Plan plan, int index, DateTime today, DateTime started)
+    public static bool DropUnstudiedReviews(AppData data)
+    {
+        var changed = false;
+        foreach (var plan in data.Plans.Where(p => p.Name != QuickAdd.PlanName))
+            foreach (var word in plan.Words)
+            {
+                if (word.Review is not { Reps: 0, Lapses: 0 } state || state.LastReviewed != default || word.ReviewBeforeToday is not null) continue;
+                word.Review = null;
+                word.IntroducedOn = null;
+                changed = true;
+            }
+        return changed;
+    }
+
+    /// <summary>
+    /// Leaves the current day for the next one; past the last day the next plan starts (its summary queued)
+    /// or the course ends.
+    /// </summary>
+    private static void MoveToNextDay(AppData data, Plan plan, int index)
     {
         var position = data.Position;
-        foreach (var word in plan.Words.Where(w => w.Day == position.Day && !w.Learned && w.Review is null))
-        {
-            word.IntroducedOn ??= started;
-            word.Review = new ReviewState { Due = today };
-        }
         position.DayCompleted = false;
         position.DayCompletedOn = null;
-        position.DayStartedOn = today;
         if (position.Day < plan.DayCount)
         {
             position.Day++;
@@ -200,19 +182,6 @@ public static class CourseEngine
         {
             position.Finished = true;
         }
-    }
-
-    /// <summary>
-    /// Data saved before the start date was kept: the day started when it was completed, else on the latest
-    /// day anything was studied before today, else today.
-    /// </summary>
-    private static DateTime InferDayStart(AppData data, DateTime today)
-    {
-        if (data.Position.DayCompletedOn is DateTime done) return done.Date;
-        var studied = data.StudyLog.Keys
-            .Select(k => DateTime.TryParse(k, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? d : (DateTime?)null)
-            .OfType<DateTime>().Where(d => d.Date < today).ToList();
-        return studied.Count > 0 ? studied.Max().Date : today;
     }
 
     /// <summary>State of a plan in the course relative to the learner: done, current or waiting.</summary>
@@ -321,7 +290,10 @@ public static class CourseEngine
 
     // ---------- quick rating from the popup ----------
 
-    /// <summary>"Đã thuộc": the word is no longer shown or reviewed, and leaves the mistake lists.</summary>
+    /// <summary>
+    /// "Đã thuộc": the word is no longer shown or reviewed, and leaves the mistake lists. Once every word of
+    /// the current day is learned, the next <see cref="Advance"/> moves the course on.
+    /// </summary>
     public static void MarkLearned(AppData data, Word word, DateTime now)
     {
         word.Learned = true;
@@ -411,8 +383,9 @@ public static class CourseEngine
 
     /// <summary>
     /// Records a finished session: every answer updates spaced repetition, wrong answers are kept for a
-    /// mistake day, new words are stamped as introduced today and the day is marked complete (so tomorrow
-    /// moves on). On a mistake day the mistake day is finished instead and the course day stays open.
+    /// mistake day, new words are stamped as introduced today and today's session is marked done. The course
+    /// day itself only moves on once all its words are marked "Đã thuộc" (<see cref="Advance"/>). On a
+    /// mistake day the mistake day is finished instead.
     /// </summary>
     public static void ApplySession(AppData data, IReadOnlyList<(Word Word, bool Correct)> answers,
         IReadOnlyCollection<Word> newWords, DateTime now)

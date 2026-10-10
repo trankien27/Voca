@@ -74,18 +74,21 @@
                 <TextBlock Text="KẾT QUẢ HÔM NAY" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Accent}"/>
                 <TextBlock x:Name="ResultScore" FontFamily="Georgia" FontSize="44" Foreground="{StaticResource Ink}"/>
                 <TextBlock x:Name="ResultNote" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,2,0,10"/>
-                <Border x:Name="NextStepsPanel" Background="#F0EEFF" CornerRadius="10" Padding="12,8" Margin="0,0,0,10" Visibility="Collapsed">
+                <Border x:Name="LearnedPanel" Background="#F0EEFF" CornerRadius="10" Padding="12,8" Margin="0,0,0,10" Visibility="Collapsed">
                     <DockPanel>
-                        <WrapPanel x:Name="NextStepsButtons" DockPanel.Dock="Right" VerticalAlignment="Center"/>
-                        <TextBlock Text="Hết từ của ngày này. Học tiếp luôn hay kiểm tra lại?" FontWeight="SemiBold"
-                                   Foreground="{StaticResource Ink}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                        <Button x:Name="TickCorrectButton" DockPanel.Dock="Right" Content="✓ Tích các từ trả lời đúng" Click="TickCorrect_Click"
+                                Padding="10,5" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                        <TextBlock x:Name="LearnedHint" FontWeight="SemiBold" Foreground="{StaticResource Ink}" VerticalAlignment="Center" TextWrapping="Wrap"/>
                     </DockPanel>
                 </Border>
             </StackPanel>
-            <ListBox x:Name="ResultList" Grid.Row="1" BorderBrush="#E6E3F5" Background="White" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox x:Name="ResultList" Grid.Row="1" BorderBrush="#E6E3F5" Background="White" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     HorizontalContentAlignment="Stretch">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <DockPanel Margin="4,3">
+                            <CheckBox DockPanel.Dock="Right" Content="Đã thuộc" IsChecked="{Binding Learned, Mode=TwoWay}" Visibility="{Binding LearnedVisibility}"
+                                      Margin="12,0,0,0" VerticalAlignment="Center" ToolTip="Không hiện từ này nữa; thuộc hết từ của ngày thì sang ngày tiếp"/>
                             <TextBlock DockPanel.Dock="Right" Text="{Binding Next}" Foreground="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0"/>
                             <TextBlock Text="{Binding Mark}" Foreground="{Binding MarkBrush}" FontWeight="Bold" Width="20"/>
                             <TextBlock TextTrimming="CharacterEllipsis">

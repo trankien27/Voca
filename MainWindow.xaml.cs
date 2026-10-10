@@ -36,6 +36,8 @@ public partial class MainWindow : Window
     private ToolStripItem? _updatesMenuItem;
     /// <summary>The word just marked "Đã thuộc", for "Hoàn tác".</summary>
     private Word? _undoWord;
+    /// <summary>Course position before the last "Đã thuộc", restored by undo.</summary>
+    private CourseState? _undoPosition;
     private bool _hotkeyReady;
     private QuickAddWindow? _quickAddWindow;
     /// <summary>What clicking the last tray balloon does (start the session, or install an update).</summary>
@@ -64,8 +66,8 @@ public partial class MainWindow : Window
         Loaded += (_, _) => { Reload(); RestoreOrSetDefaultPosition(); KeepAboveTaskbar(); _topmostTimer.Start(); SayIfUpdated(); StartUpdateCheck(); };
         // Pause rotation while the detail popup is open so the word being read stays put.
         DetailPopup.Opened += (_, _) => _timer.Stop();
-        DetailPopup.Closed += (_, _) => { _timer.Start(); UndoPanel.Visibility = Visibility.Collapsed; _undoWord = null; };
-        SourceInitialized += (_, _) => RegisterQuickAddHotkey();
+        DetailPopup.Closed += (_, _) => { _timer.Start(); UndoPanel.Visibility = Visibility.Collapsed; _undoWord = null; _undoPosition = null; };
+        SourceInitialized += (_, _) => { HideFromAltTab(); RegisterQuickAddHotkey(); };
         Closed += (_, _) => { _topmostTimer.Stop(); _updateTimer.Stop(); UnregisterQuickAddHotkey(); _tray.Dispose(); _speaker.Dispose(); };
     }
 
@@ -99,6 +101,7 @@ public partial class MainWindow : Window
         menu.Items.Add("Tạo bài kiểm tra", null, (_, _) => Dispatcher.Invoke(OpenTest));
         menu.Items.Add("Danh sách từ sai", null, (_, _) => Dispatcher.Invoke(OpenMistakes));
         menu.Items.Add("Từ của tôi (Ctrl+Alt+V)", null, (_, _) => Dispatcher.Invoke(OpenMyWords));
+        menu.Items.Add("Phụ đề từ video…", null, (_, _) => Dispatcher.Invoke(OpenVideo));
         _updatesMenuItem = menu.Items.Add("Cập nhật phiên bản…", null, (_, _) => Dispatcher.Invoke(OpenUpdates));
         menu.Items.Add("Thư viện và cài đặt", null, (_, _) => Dispatcher.Invoke(OpenLibrary));
         menu.Items.Add("Thống kê học tập", null, (_, _) => Dispatcher.Invoke(OpenStats));
@@ -113,11 +116,13 @@ public partial class MainWindow : Window
         try
         {
             var today = DateTime.Today;
+            var dayBefore = CourseEngine.Current(_data) is var (planBefore, _) ? (Plan: planBefore, _data.Position.Day) : default;
             var moved = CourseEngine.Advance(_data, today);
             var cleaned = MistakeDays.Cleanup(_data, today);
             var tidied = MistakeDays.Tidy(_data, DateTime.Now);
-            var allLearned = CourseEngine.CompleteIfAllLearned(_data, today);
-            if (moved || cleaned || tidied || allLearned) _store.Save();
+            var repaired = CourseEngine.DropUnstudiedReviews(_data);
+            if (moved || cleaned || tidied || repaired) _store.Save();
+            if (dayBefore.Plan is not null && !DetailPopup.IsOpen) AnnounceDayLearned(dayBefore.Plan, dayBefore.Day);
             var dateChanged = _loadedDate != today;
             var currentId = !dateChanged && _index < _today.Count ? _today[_index].Id : (Guid?)null;
             var list = CourseEngine.BuildToday(_data, today, out _fresh);
@@ -142,6 +147,26 @@ public partial class MainWindow : Window
         {
             _reloading = false;
         }
+    }
+
+    /// <summary>A tray note when the course moved on because every word of the day was marked learned.</summary>
+    private void AnnounceDayLearned(Plan plan, int day)
+    {
+        if (DayLearnedText(plan, day) is not { } text) return;
+        _balloonAction = OpenSession;
+        _tray.ShowBalloonTip(8000, "Voca", text, ToolTipIcon.None);
+    }
+
+    /// <summary>"Đã thuộc hết Ngày N … Sang Ngày M." once the position has left that day; null while still on it.</summary>
+    private string? DayLearnedText(Plan plan, int day)
+    {
+        var position = _data.Position;
+        if (position.PlanId == plan.Id && position.Day == day && !position.Finished) return null;
+        var next = position.Finished ? "Đã học hết khóa học."
+            : CourseEngine.Current(_data) is not var (now, _) ? ""
+            : now == plan ? $"Sang Ngày {position.Day}/{plan.DayCount}."
+            : $"Sang lộ trình {now.Name}.";
+        return $"Đã thuộc hết Ngày {day} · {plan.Name} 🎉 {next}".TrimEnd();
     }
 
     /// <summary>Resizes the pill window for the chosen font size and width, keeping it on the taskbar.</summary>
@@ -212,8 +237,6 @@ public partial class MainWindow : Window
             return ("Thêm chủ đề ⚙", "Khóa học đang trống", "Mở Thư viện (⚙) để tạo chủ đề mới hoặc thêm lộ trình vào khóa học.");
         if (_data.Position.Finished)
             return ("Hoàn thành 🎉", "Đã học hết khóa học", "Mở Thư viện (⚙) để tạo chủ đề mới. Từ cũ vẫn được ôn khi đến hạn.");
-        if (_data.Position.DayCompleted)
-            return ("Xong hôm nay ✓", "Đã học xong hôm nay", "Mai sang ngày tiếp theo. Từ cũ vẫn được ôn khi đến hạn.");
         return ("Nghỉ hôm nay", $"Ngày {_data.Position.Day} trống", "Ngày này chưa có từ. Thêm từ trong Thư viện.");
     }
 
@@ -319,6 +342,7 @@ public partial class MainWindow : Window
     private void RenderCourse()
     {
         RenderMistakePanel();
+        RenderCatchUp();
         if (MistakeDays.Active(_data, DateTime.Today) is { } mistakeDay && _fresh.Count > 0)
         {
             RenderMistakeDay(mistakeDay);
@@ -337,7 +361,7 @@ public partial class MainWindow : Window
         WeekDots.Columns = Math.Max(1, plan.DayCount);
         for (var day = 1; day <= plan.DayCount; day++)
         {
-            var done = day < position.Day || (day == position.Day && (position.DayCompleted || position.Finished));
+            var done = day < position.Day || position.Finished;
             WeekDots.Children.Add(new System.Windows.Controls.Border
             {
                 Height = 6, CornerRadius = new CornerRadius(3), Margin = new Thickness(2, 0, 2, 0),
@@ -346,57 +370,34 @@ public partial class MainWindow : Window
         }
         var title = plan.DayTitle(position.Day);
         var reviews = _today.Count - _fresh.Count;
+        var dayWords = CourseEngine.DayWords(_data);
+        var learned = dayWords.Count(w => w.Learned);
+        var left = dayWords.Count - learned;
         var status = position.Finished ? "Đã học hết khóa học. Từ cũ vẫn được ôn khi đến hạn."
-            : position.DayCompleted ? "Đã học xong hôm nay ✓ · ngày mai sang ngày tiếp theo"
-            : $"Hôm nay: {_fresh.Count} từ mới · {reviews} từ cần ôn";
+            : position.DayCompleted ? $"Đã học phiên hôm nay ✓ · đã thuộc {learned}/{dayWords.Count} từ\nBấm ✓ Đã thuộc cho từ đã nhớ; thuộc hết {left} từ còn lại thì sang ngày tiếp."
+            : $"Hôm nay: {left} từ chưa thuộc · {reviews} từ cần ôn\nĐã thuộc {learned}/{dayWords.Count} từ · thuộc hết thì sang ngày tiếp.";
         CourseStatusText.Text = title.Length > 0 && !position.Finished ? $"{title}\n{status}" : status;
         SessionButton.Content = position.DayCompleted || position.Finished ? "Học lại / ôn tập" : "Bắt đầu phiên học";
-        RenderNextChoice(plan);
+    }
+
+    /// <summary>"↺ Ngày N chưa học · Học bù" for the latest day that was skipped (its words are not on the taskbar).</summary>
+    private void RenderCatchUp()
+    {
+        var skipped = MistakeDays.Active(_data, DateTime.Today) is null ? CourseEngine.SkippedDay(_data) : null;
+        CatchUpLink.Visibility = skipped is null ? Visibility.Collapsed : Visibility.Visible;
+        if (skipped is var (day, words))
+            CatchUpLink.Content = $"↺ Ngày {day} chưa học ({words.Count} từ) · Học bù";
+    }
+
+    private void CatchUp_Click(object sender, RoutedEventArgs e)
+    {
+        if (CourseEngine.SkippedDay(_data) is var (day, words))
+            OpenPractice(words, $"Học bù Ngày {day}", SessionMode.NewWords);
     }
 
     /// <summary>Today is a mistake day: the course panel shows it instead of the course day.</summary>
-    /// <summary>Today's words are done: ask whether to go on to the next day now or take a test.</summary>
-    private void RenderNextChoice(Plan plan)
-    {
-        var position = _data.Position;
-        var next = position.DayCompleted && !position.Finished ? CourseEngine.NextDay(_data) : null;
-        NextChoicePanel.Visibility = next is null ? Visibility.Collapsed : Visibility.Visible;
-        // With the two choices shown, "Học lại / ôn tập" steps back to a quiet button.
-        SessionButton.Background = next is null ? (System.Windows.Media.Brush)FindResource("Accent") : SessionQuietBrush;
-        SessionButton.Foreground = next is null ? System.Windows.Media.Brushes.White : SessionQuietInk;
-        if (next is not var (nextPlan, nextDay)) return;
-        NextChoiceText.Text = $"Đã xong Ngày {position.Day} 🎉 Học tiếp luôn hay kiểm tra lại?";
-        StudyNextButton.Content = NextLabel(plan, nextPlan, nextDay);
-        TestDoneDaysButton.Content = position.Day > 1 ? $"📝 Kiểm tra ngày 1–{position.Day}" : "📝 Kiểm tra Ngày 1";
-    }
-
-    private static readonly System.Windows.Media.Brush SessionQuietBrush = Frozen(0xF0, 0xEE, 0xFF), SessionQuietInk = Frozen(0x4B, 0x3C, 0xC4);
-
-    private static string NextLabel(Plan current, Plan nextPlan, int nextDay) =>
-        nextPlan == current ? $"▶ Học tiếp Ngày {nextDay}" : "▶ Sang lộ trình tiếp";
-
-    /// <summary>"Học tiếp": moves to the next day now and opens its session.</summary>
-    private void StudyNextNow()
-    {
-        var moved = false;
-        _store.Update(d => moved = CourseEngine.StudyNextDayNow(d, DateTime.Today));
-        if (moved) OpenSession();
-    }
-
-    /// <summary>A test over the days of the current plan studied so far.</summary>
-    private void TestDoneDays()
-    {
-        DetailPopup.IsOpen = false;
-        if (CourseEngine.Current(_data) is not var (plan, _)) return;
-        new TestWindow(_store, plan.Id, 1, _data.Position.Day, Actions).Show();
-    }
-
-    private void StudyNext_Click(object sender, RoutedEventArgs e) => StudyNextNow();
-    private void TestDoneDays_Click(object sender, RoutedEventArgs e) => TestDoneDays();
-
     private void RenderMistakeDay(MistakeDay day)
     {
-        NextChoicePanel.Visibility = Visibility.Collapsed;
         CoursePanel.Visibility = Visibility.Visible;
         WeekDots.Visibility = Visibility.Collapsed;
         CourseEyebrow.Text = $"NGÀY HỌC TỪ SAI · {_fresh.Count} TỪ";
@@ -497,13 +498,8 @@ public partial class MainWindow : Window
         var mistakeDay = MistakeDays.Active(_data, DateTime.Today) is not null && fresh.Count > 0;
         var courseText = mistakeDay ? $"Ngày học từ sai · {fresh.Count} từ"
             : CourseEngine.Current(_data) is var (plan, _) ? $"{plan.Name} · Ngày {_data.Position.Day}/{plan.DayCount}" : "";
-        // After a course session: offer to go on to the next day right away, or to take a test.
-        IReadOnlyList<(string, Action)>? nextSteps = null;
-        if (!mistakeDay && CourseEngine.Current(_data) is var (current, _) && CourseEngine.NextDay(_data) is var (nextPlan, nextDay))
-            nextSteps = [(NextLabel(current, nextPlan, nextDay), StudyNextNow),
-                         (_data.Position.Day > 1 ? $"📝 Kiểm tra ngày 1–{_data.Position.Day}" : "📝 Kiểm tra Ngày 1", TestDoneDays)];
-        _sessionWindow = new SessionWindow(_data, fresh, reviews, courseText, FinishSession, Speak,
-            mistakeDay ? SessionMode.MistakeDay : SessionMode.Course, nextSteps);
+        _sessionWindow = new SessionWindow(_data, fresh, reviews, courseText, FinishSession, Speak, MarkLearnedFromSession,
+            mistakeDay ? SessionMode.MistakeDay : SessionMode.Course);
         _sessionWindow.Closed += (_, _) => _sessionWindow = null;
         _sessionWindow.Show();
         _sessionWindow.Activate();
@@ -617,6 +613,17 @@ public partial class MainWindow : Window
         return true;
     }
 
+    /// <summary>
+    /// The word on the taskbar is a tool window, so Alt+Tab never lists it or switches to it (it is not in
+    /// the taskbar either). Library, session and other windows stay ordinary windows.
+    /// </summary>
+    private void HideFromAltTab()
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        var style = GetWindowLongPtr(handle, GwlExStyle).ToInt64();
+        SetWindowLongPtr(handle, GwlExStyle, new IntPtr((style | WsExToolWindow) & ~WsExAppWindow));
+    }
+
     private void KeepAboveTaskbar()
     {
         if (_hiddenForFullScreen) return;
@@ -671,6 +678,14 @@ public partial class MainWindow : Window
     }
 
     private static readonly IntPtr HwndTopmost = new(-1);
+    private const int GwlExStyle = -20;
+    private const long WsExToolWindow = 0x00000080, WsExAppWindow = 0x00040000;
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+    private static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int index);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+    private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int index, IntPtr value);
     private const uint SwpNoSize = 0x0001;
     private const uint SwpNoMove = 0x0002;
     private const uint SwpNoActivate = 0x0010;
@@ -819,11 +834,18 @@ public partial class MainWindow : Window
         if (_today.Count == 0) return;
         var word = _today[_index];
         _undoWord = word;
+        _undoPosition = _data.Position.Copy();
+        var dayBefore = CourseEngine.Current(_data) is var (plan, _) ? (Plan: plan, _data.Position.Day) : default;
         _store.Update(d => CourseEngine.MarkLearned(d, word, DateTime.Now));
-        UndoText.Text = $"Đã đánh dấu thuộc “{word.Text}” — từ này sẽ không hiện nữa.";
+        var moved = dayBefore.Plan is null ? null : DayLearnedText(dayBefore.Plan, dayBefore.Day);
+        UndoText.Text = moved ?? $"Đã đánh dấu thuộc “{word.Text}” — từ này sẽ không hiện nữa.";
         UndoButton.Visibility = Visibility.Visible;
         UndoPanel.Visibility = Visibility.Visible;
     }
+
+    /// <summary>Words ticked "Đã thuộc" on a session's result screen.</summary>
+    private void MarkLearnedFromSession(IReadOnlyList<Word> words) =>
+        _store.Update(d => { foreach (var word in words) CourseEngine.MarkLearned(d, word, DateTime.Now); });
 
     private void NotRemembered_Click(object sender, RoutedEventArgs e)
     {
@@ -839,8 +861,15 @@ public partial class MainWindow : Window
     private void Undo_Click(object sender, RoutedEventArgs e)
     {
         if (_undoWord is not { } word) return;
+        var position = _undoPosition;
         _undoWord = null;
-        _store.Update(_ => CourseEngine.UnmarkLearned(word));
+        _undoPosition = null;
+        _store.Update(d =>
+        {
+            CourseEngine.UnmarkLearned(word);
+            // That word may have finished the day and moved the course on: go back to the day.
+            if (position is not null) d.Position = position;
+        });
         UndoText.Text = $"Đã hoàn tác: “{word.Text}” sẽ hiện lại.";
         UndoButton.Visibility = Visibility.Collapsed;
     }
@@ -990,6 +1019,7 @@ public partial class MainWindow : Window
     }
 
     private void Test_Click(object sender, RoutedEventArgs e) => OpenTest();
+    private void Video_Click(object sender, RoutedEventArgs e) => OpenVideo();
 
     /// <summary>Opens the library on its "Từ sai" tab.</summary>
     private void OpenMistakes()
@@ -1012,10 +1042,16 @@ public partial class MainWindow : Window
             return;
         }
         _sessionWindow = new SessionWindow(_data, words, [], title,
-            (answers, _) => _store.Update(d => MistakeDays.ApplyPractice(d, answers, DateTime.Now)), Speak, mode);
+            (answers, _) => _store.Update(d => MistakeDays.ApplyPractice(d, answers, DateTime.Now)), Speak, MarkLearnedFromSession, mode);
         _sessionWindow.Closed += (_, _) => _sessionWindow = null;
         _sessionWindow.Show();
         _sessionWindow.Activate();
+    }
+
+    private void OpenVideo()
+    {
+        OpenLibrary();
+        _libraryWindow?.ShowVideo();
     }
 
     private void OpenLibrary()

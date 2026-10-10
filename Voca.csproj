@@ -9,15 +9,21 @@
     <AssemblyName>Voca</AssemblyName>
     <RootNamespace>Voca</RootNamespace>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <Version>2.8.2</Version>
+    <Version>2.10.0</Version>
     <Product>Voca</Product>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
     <PackageReference Include="System.Speech" Version="8.0.0" />
+    <PackageReference Include="Whisper.net" Version="1.9.1" />
+    <!-- Its build step would copy native libraries for every platform next to the exe; only win-x64 is embedded below. -->
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" GeneratePathProperty="true" ExcludeAssets="build" />
   </ItemGroup>
   <ItemGroup>
     <!-- Ready-made plans imported on first run, in course order. -->
     <EmbeddedResource Include="Seed\*.md" LogicalName="Seed.%(Filename)%(Extension)" />
+    <!-- Whisper's native libraries travel inside Voca.exe and are unpacked on first use (Services\Transcriber.cs). -->
+    <EmbeddedResource Include="$(PkgWhisper_net_Runtime)\build\win-x64\*.dll" LogicalName="Whisper.%(Filename)%(Extension)" Visible="false" />
     <Compile Remove="tests\**" />
     <None Remove="tests\**" />
   </ItemGroup>

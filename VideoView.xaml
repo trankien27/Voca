@@ -1,0 +1,115 @@
+<UserControl x:Class="Voca.VideoView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Loaded="View_Loaded">
+    <UserControl.Resources>
+        <Style x:Key="Panel" TargetType="Border">
+            <Setter Property="Background" Value="White"/><Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="BorderBrush" Value="#E6E3F5"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Padding" Value="12"/>
+        </Style>
+        <Style x:Key="Step" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14"/><Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+    </UserControl.Resources>
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+            <TextBlock Text="Phụ đề từ video" FontSize="19" FontWeight="Bold" Foreground="{StaticResource Ink}"/>
+            <TextBlock Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0"
+                       Text="Chọn một video (mp4, mkv, mov…) nói tiếng Anh: Voca nhận dạng giọng nói ngay trên máy (không cần mạng, trừ lần đầu tải model) và lưu file phụ đề .srt cạnh video. Sau đó có thể lấy những từ chưa có trong thư viện để tạo bộ từ mới."/>
+        </StackPanel>
+        <TextBlock DockPanel.Dock="Bottom" x:Name="StatusText" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="4,10,0,0"/>
+        <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="14"/><ColumnDefinition Width="400"/></Grid.ColumnDefinitions>
+
+            <!-- subtitles -->
+            <Border Style="{StaticResource Panel}">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top">
+                        <TextBlock Style="{StaticResource Step}" Text="1 · Chọn video và tạo phụ đề"/>
+                        <DockPanel Margin="-3,0,0,6">
+                            <Button DockPanel.Dock="Left" x:Name="PickButton" Content="Chọn video hoặc .srt…" Click="Pick_Click"/>
+                            <TextBlock x:Name="FileText" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="6,0,0,0"
+                                       TextTrimming="CharacterEllipsis" Text="Chưa chọn file"/>
+                        </DockPanel>
+                        <DockPanel Margin="-3,0,0,6">
+                            <TextBlock DockPanel.Dock="Left" Text="Model" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="3,0,8,0"/>
+                            <ComboBox x:Name="ModelBox" DisplayMemberPath="Label" Padding="6,4" SelectionChanged="ModelBox_SelectionChanged"/>
+                        </DockPanel>
+                        <WrapPanel Margin="-3,0,0,6">
+                            <Button x:Name="RunButton" Content="Tạo phụ đề" Click="Run_Click" IsEnabled="False"
+                                    Background="{StaticResource Accent}" Foreground="White" FontWeight="SemiBold"/>
+                            <Button x:Name="CancelButton" Content="Hủy" Click="Cancel_Click" Visibility="Collapsed"/>
+                            <Button x:Name="SaveButton" Content="Lưu .srt…" Click="Save_Click" IsEnabled="False"/>
+                            <Button x:Name="OpenFolderButton" Content="Mở thư mục" Click="OpenFolder_Click" IsEnabled="False"/>
+                        </WrapPanel>
+                        <ProgressBar x:Name="Progress" Height="6" Maximum="100" Visibility="Collapsed" Margin="0,0,0,4"
+                                     Foreground="{StaticResource Accent}" Background="#ECEAF8" BorderThickness="0"/>
+                        <TextBlock x:Name="StageText" Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                    </StackPanel>
+                    <ListBox x:Name="LinesList" BorderBrush="#E6E3F5" HorizontalContentAlignment="Stretch"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <DockPanel Margin="2,2">
+                                    <TextBlock DockPanel.Dock="Left" Text="{Binding Time}" Foreground="#667085" FontSize="11" Width="64"
+                                               FontFamily="Consolas" VerticalAlignment="Top" Margin="0,2,0,0"/>
+                                    <TextBlock Text="{Binding Text}" Foreground="#172033" TextWrapping="Wrap"/>
+                                </DockPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <!-- optional: a plan from the new words -->
+            <Border Grid.Column="2" Style="{StaticResource Panel}">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top">
+                        <TextBlock Style="{StaticResource Step}" Text="2 · Tạo bộ từ (tùy chọn)"/>
+                        <TextBlock Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6"
+                                   Text="Những từ trong video chưa có trong thư viện (đã bỏ từ quá phổ biến và tên riêng). Tích các từ muốn học."/>
+                        <WrapPanel Margin="-3,0,0,6">
+                            <Button x:Name="FindWordsButton" Content="Tìm từ mới" Click="FindWords_Click" IsEnabled="False"/>
+                            <Button x:Name="SelectAllButton" Content="Chọn tất cả" Click="SelectAll_Click" IsEnabled="False"/>
+                            <Button x:Name="SelectNoneButton" Content="Bỏ chọn" Click="SelectNone_Click" IsEnabled="False"/>
+                        </WrapPanel>
+                    </StackPanel>
+                    <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                        <DockPanel Margin="0,0,0,6">
+                            <TextBlock DockPanel.Dock="Left" Text="Tên" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Width="34"/>
+                            <TextBlock DockPanel.Dock="Right" Text="từ/ngày" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                            <TextBox DockPanel.Dock="Right" x:Name="PerDayBox" Text="20" Width="40" Padding="4" Margin="8,0,0,0" TextChanged="PlanInput_Changed"/>
+                            <TextBox x:Name="PlanNameBox" Padding="4" TextChanged="PlanInput_Changed"/>
+                        </DockPanel>
+                        <WrapPanel Margin="-3,0,0,6">
+                            <Button x:Name="CopyPromptButton" Content="Sao chép prompt" Click="CopyPrompt_Click" IsEnabled="False"
+                                    Background="{StaticResource Accent}" Foreground="White" FontWeight="SemiBold"/>
+                            <Button Content="Claude" Tag="https://claude.ai/new" Click="OpenAi_Click"/>
+                            <Button Content="ChatGPT" Tag="https://chatgpt.com/" Click="OpenAi_Click"/>
+                            <Button Content="Gemini" Tag="https://gemini.google.com/app" Click="OpenAi_Click"/>
+                        </WrapPanel>
+                        <TextBox x:Name="AnswerBox" Height="90" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                 Padding="4" FontFamily="Consolas" FontSize="11" ToolTip="Dán câu trả lời của AI vào đây"/>
+                        <Button x:Name="ImportButton" Content="Nhập vào khóa học" Click="Import_Click" Margin="-3,6,0,0" HorizontalAlignment="Left"/>
+                    </StackPanel>
+                    <ListBox x:Name="WordsList" BorderBrush="#E6E3F5" HorizontalContentAlignment="Stretch"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <DockPanel Margin="2,2" ToolTip="{Binding Example}">
+                                    <CheckBox DockPanel.Dock="Left" IsChecked="{Binding Picked, Mode=TwoWay}" Click="WordBox_Click" VerticalAlignment="Center"/>
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" Foreground="#667085" FontSize="11" VerticalAlignment="Center"/>
+                                    <StackPanel Margin="4,0,6,0">
+                                        <TextBlock Text="{Binding Text}" FontWeight="SemiBold" Foreground="#172033"/>
+                                        <TextBlock Text="{Binding Example}" Foreground="#667085" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                </DockPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</UserControl>

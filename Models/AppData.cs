@@ -178,16 +178,17 @@ public sealed class CourseState
 
     public Guid? PlanId { get; set; }
     public int Day { get; set; } = 1;
-    /// <summary>Today's session was finished (shown as "Đã học xong hôm nay").</summary>
+    /// <summary>
+    /// Today's session was finished; cleared on the next date. The day itself moves on only when all its
+    /// words are marked "Đã thuộc".
+    /// </summary>
     public bool DayCompleted { get; set; }
     public DateTime? DayCompletedOn { get; set; }
-    /// <summary>Calendar date the current day became current; the next calendar date moves on.</summary>
-    public DateTime? DayStartedOn { get; set; }
-    /// <summary>Last date a mistake day replaced the lesson (the course day keeps its turn).</summary>
-    public DateTime? PausedOn { get; set; }
     /// <summary>A plan just finished whose summary has not been shown yet.</summary>
     public Guid? PendingSummaryPlanId { get; set; }
     public bool Finished { get; set; }
+
+    public CourseState Copy() => (CourseState)MemberwiseClone();
 }
 
 /// <summary>A word answered wrong, and how often, until it is answered right on a mistake day.</summary>

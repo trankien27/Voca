@@ -370,6 +370,9 @@
             <!-- ================= My words (Ctrl+Alt+V) ================= -->
             <TabItem Header="  Từ của tôi  " x:Name="MyWordsTab"/>
 
+            <!-- ================= Subtitles from a video ================= -->
+            <TabItem Header="  Phụ đề video  " x:Name="VideoTab"/>
+
             <!-- ================= Settings ================= -->
             <TabItem Header="  Cài đặt  " x:Name="SettingsTab">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">

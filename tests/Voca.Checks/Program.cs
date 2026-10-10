@@ -10,7 +10,7 @@ void Check(bool ok, string what)
     Console.WriteLine((ok ? "PASS " : "FAIL ") + what);
     if (!ok) fails++;
 }
-var d0 = new DateTime(2026, 10, 6);
+var d0 = DateTime.Today;
 
 // ---------- bundled content ----------
 var data = new AppData();
@@ -35,7 +35,8 @@ Check(quiz.Where(q => q.AskWord).All(q => q.Options.Count(o => plan1.Words.Any(w
 var answers = quiz.Select((q, i) => (q.Word, i != 1)).ToList(); // second answer wrong
 CourseEngine.ApplySession(data, answers, fresh, d0.AddHours(9));
 var wrong = answers[1].Word;
-Check(data.Position.DayCompleted && data.StudyLog[ReviewScheduler.Key(d0)].SessionDone, "session completes the day");
+Check(data.Position.DayCompleted && data.Position.Day == 1 && data.StudyLog[ReviewScheduler.Key(d0)].SessionDone,
+    "session marks today's session done, the course day stays");
 Check(wrong.Review!.Due == d0.AddDays(1) && ReviewScheduler.IsWrongToday(wrong, d0) && wrong.ForgotCount == 1, "wrong answer: back tomorrow, flagged wrong today");
 Check(answers[0].Word.Review!.Due == d0.AddDays(2) && answers[0].Word.CorrectCount == 1, "right answer: next review in 2 days");
 Check(fresh.All(w => w.IntroducedOn == d0), "new words stamped as introduced today");
@@ -53,20 +54,53 @@ Check(w1.Review!.IntervalDays == 15, "right ×3 → 2, 6, 15 days");
 ReviewScheduler.Rate(sr, w1, false, d0.AddDays(23));
 Check(w1.Review.IntervalDays == 1 && w1.Review.Lapses == 1 && Math.Abs(w1.Review.Ease - 2.3) < 1e-9, "wrong after reps: lapse, 1 day, ease 2.3");
 
-// ---------- advancing ----------
-Check(!CourseEngine.Advance(data, d0), "same day: stays on day 1");
-Check(CourseEngine.Advance(data, d0.AddDays(1)) && data.Position.Day == 2, "next day: day 2");
-var unstudied = CourseEngine.DayWords(data);
-Check(CourseEngine.Advance(data, d0.AddDays(9)) && data.Position.Day == 3 && !CourseEngine.Advance(data, d0.AddDays(9)),
-    "new date: moves on even if the day was not studied, one day per date (days away are not piled up)");
-Check(unstudied.All(w => w.Review is { } r && r.Due == d0.AddDays(9) && w.IntroducedOn == d0.AddDays(1))
-      && unstudied.All(w => ReviewScheduler.IsDueReview(w, d0.AddDays(9))),
-    "words of an unstudied day go into reviews instead of being lost");
+// ---------- advancing: only once every word of the day is marked learned ----------
+var adv = new AppData();
+SeedData.EnsureSeeded(adv);
+var advDay1 = CourseEngine.DayWords(adv);
+CourseEngine.ApplySession(adv, advDay1.Select(w => (w, true)).ToList(), advDay1, d0.AddHours(9));
+Check(!CourseEngine.Advance(adv, d0) && adv.Position is { Day: 1, DayCompleted: true }, "same date: stays on day 1");
+Check(CourseEngine.Advance(adv, d0.AddDays(1)) && adv.Position is { Day: 1, DayCompleted: false }
+      && CourseEngine.BuildToday(adv, d0.AddDays(1), out var advFresh).Count > 0 && advFresh.SetEquals(advDay1),
+    "next date, words not learned: still day 1 with the same words, today's session to do again");
+Check(!CourseEngine.Advance(adv, d0.AddDays(9)) && adv.Position.Day == 1, "days away do not move the course");
+foreach (var w in advDay1.Take(19)) CourseEngine.MarkLearned(adv, w, d0.AddDays(9));
+Check(!CourseEngine.Advance(adv, d0.AddDays(9)) && adv.Position.Day == 1 && CourseEngine.NewWords(adv).Single() == advDay1[19],
+    "19 of 20 learned: still day 1, only the last word left");
+CourseEngine.MarkLearned(adv, advDay1[19], d0.AddDays(9));
+Check(CourseEngine.Advance(adv, d0.AddDays(9)) && adv.Position.Day == 2 && CourseEngine.NewWords(adv).Count == 20 && CourseEngine.NewWords(adv).All(w => w.Day == 2),
+    "every word learned: day 2 right away, the same date");
+foreach (var w in adv.Plans[0].Words.Where(w => w.Day is 2 or 3)) CourseEngine.MarkLearned(adv, w, d0.AddDays(9));
+Check(CourseEngine.Advance(adv, d0.AddDays(9)) && adv.Position.Day == 4, "days already learned are all passed");
+var emptyPlan = new AppData { Plans = [new Plan { Name = "trống" }] };
+emptyPlan.Course.Add(emptyPlan.Plans[0].Id);
+CourseEngine.EnsurePosition(emptyPlan);
+Check(!CourseEngine.Advance(emptyPlan, d0) && !emptyPlan.Position.Finished && emptyPlan.Position.Day == 1, "a plan without words holds the course");
+adv.Position.Day = 6; // older versions moved on each date, leaving days 4–5 unstudied
+var skipped5 = adv.Plans[0].Words.Where(w => w.Day == 5).ToList();
+Check(CourseEngine.SkippedDay(adv) is var (skippedDay, skippedWords) && skippedDay == 5 && skippedWords.SequenceEqual(skipped5),
+    "a day skipped by an older version is offered to catch up (Học bù)");
+Check(!CourseEngine.BuildToday(adv, d0.AddDays(9), out _).Any(skipped5.Contains), "words of a skipped day stay off the taskbar");
+MistakeDays.ApplyPractice(adv, skipped5.Select(w => (w, true)).ToList(), d0.AddDays(9).AddHours(8));
+Check(CourseEngine.SkippedDay(adv) is var (nextSkipped, _) && nextSkipped == 4 && skipped5.All(w => w.Review is not null),
+    "after catching up its words are reviewed and the earlier skipped day is offered");
+// 2.8.1–2.8.2 put skipped days into reviews without any answer; that is undone.
+var repair = new AppData();
+SeedData.EnsureSeeded(repair);
+var fake = repair.Plans[0].Words.Take(3).ToList();
+foreach (var w in fake) { w.Review = new ReviewState { Due = d0 }; w.IntroducedOn = d0.AddDays(-1); }
+var answered = repair.Plans[0].Words[5];
+ReviewScheduler.Rate(repair, answered, true, d0.AddDays(-1));
+var mine = QuickAdd.SaveWord(repair, "flummox", "", "v", "làm bối rối", "", d0)!;
+Check(CourseEngine.DropUnstudiedReviews(repair) && fake.All(w => w.Review is null && w.IntroducedOn is null)
+      && answered.Review is not null && mine.Review is not null && !CourseEngine.DropUnstudiedReviews(repair),
+    "repair: reviews of never-answered course words are dropped; answered words and “Từ của tôi” keep theirs");
 var t2 = CourseEngine.BuildToday(data, d0.AddDays(1), out var fresh2);
-Check(fresh2.Count == 20 && t2.Contains(wrong), "next day: 20 new + the wrong word as review");
-data.Position.Day = 7; data.Position.DayCompleted = true; data.Position.DayCompletedOn = d0.AddDays(7); data.Position.DayStartedOn = d0.AddDays(7);
-Check(CourseEngine.Advance(data, d0.AddDays(8)) && data.Position.PlanId == data.Plans[1].Id && data.Position.Day == 1
-      && data.Position.PendingSummaryPlanId == data.Plans[0].Id, "end of plan 1 → plan 2 day 1, summary queued");
+Check(fresh2.Count == 20 && fresh2.Contains(wrong) && t2.Count == 20, "next date, nothing learned: day 1's 20 words again, the wrong one among them");
+data.Position.Day = 7;
+foreach (var w in data.Plans[0].Words.Where(w => w.Day == 7)) CourseEngine.MarkLearned(data, w, d0.AddDays(7));
+Check(CourseEngine.Advance(data, d0.AddDays(7)) && data.Position.PlanId == data.Plans[1].Id && data.Position.Day == 1
+      && data.Position.PendingSummaryPlanId == data.Plans[0].Id, "last day of plan 1 learned → plan 2 day 1, summary queued");
 Check(CourseEngine.StateOf(data, data.Plans[0].Id) == "done" && CourseEngine.StateOf(data, data.Plans[1].Id) == "now"
       && CourseEngine.StateOf(data, data.Plans[2].Id) == "wait", "plan states: done / now / wait");
 
@@ -84,8 +118,9 @@ Check(CourseEngine.Current(data)?.Plan == data.Plans[0] && data.Position.Day == 
 
 // ---------- finishing, review plan, delete ----------
 var last = data.Course[^1];
-CourseEngine.SetPosition(data, last, 7, d0.AddDays(30)); data.Position.DayCompleted = true; data.Position.DayCompletedOn = d0.AddDays(30);
-Check(CourseEngine.Advance(data, d0.AddDays(31)) && data.Position.Finished && CourseEngine.NewWords(data).Count == 0, "end of the last plan → finished, reviews only");
+CourseEngine.SetPosition(data, last, 7);
+foreach (var w in data.Plans.Single(p => p.Id == last).Words.Where(w => w.Day == 7)) CourseEngine.MarkLearned(data, w, d0.AddDays(30));
+Check(CourseEngine.Advance(data, d0.AddDays(30)) && data.Position.Finished && CourseEngine.NewWords(data).Count == 0, "end of the last plan → finished, reviews only");
 var review = CourseEngine.CreateReviewPlan(data, 20, 10, d0.AddDays(31));
 Check(review is not null && review.Words.Count == 1 && review.Words[0].Text == wrong.Text && review.Words[0].Review is null, "review plan copies forgotten words fresh");
 Check(!data.Position.Finished && data.Position.PlanId == review?.Id, "review plan after a finished course becomes the current plan");
@@ -194,7 +229,7 @@ var own = PlanFormat.Read("""
 machineA.Plans.Add(own); CourseEngine.AddToCourse(machineA, own.Id);
 var aFresh = CourseEngine.NewWords(machineA);
 CourseEngine.ApplySession(machineA, aFresh.Select((w, i) => (w, i != 0)).ToList(), aFresh, d0.AddHours(9));
-CourseEngine.Advance(machineA, d0.AddDays(1));
+CourseEngine.SetPosition(machineA, machineA.Plans[0].Id, 2);
 var pkgFile = Path.Combine(Path.GetTempPath(), "voca-" + Guid.NewGuid().ToString("N") + Transfer.Extension);
 Transfer.Save(Transfer.CreatePackage(machineA, machineA.Plans.Select(p => p.Id).ToList(), includeProgress: true), pkgFile);
 var pkg = Transfer.Load(pkgFile);
@@ -305,11 +340,12 @@ Check(md.Mistakes.Count == 1 && md.Mistakes[0].WordId == wrongAgain.Id && md.Mis
 Check(md.MistakeDay!.Done && md.Position.Day == 1, "mistakes: finishing the mistake day does not move the course");
 CourseEngine.BuildToday(md, d1, out var afterDone);
 Check(afterDone.Count == 5, "mistakes: finished mistake day stays on the taskbar until tomorrow");
-// d2: back to the course, day 2.
-Check(CourseEngine.Advance(md, d2) && md.Position.Day == 2 && MistakeDays.Cleanup(md, d2) && md.MistakeDay is null,
-    "mistakes: next day the course moves on by one day, the finished mistake day is cleared");
+// d2: back to the course, still day 1 (its words are not learned yet).
+CourseEngine.Advance(md, d2);
+Check(md.Position.Day == 1 && MistakeDays.Cleanup(md, d2) && md.MistakeDay is null,
+    "mistakes: next day the course is back, the finished mistake day is cleared");
 CourseEngine.BuildToday(md, d2, out var day2Words);
-Check(day2Words.All(w => w.Day == 2) && day2Words.Count == 20, "mistakes: the course continues with day 2");
+Check(day2Words.All(w => w.Day == 1) && day2Words.Count == 20, "mistakes: the course continues with day 1's words");
 Check(MistakeDays.Schedule(md, d2, d2) == 1 && MistakeDays.Active(md, d2) is not null, "mistakes: can be scheduled for today");
 CourseEngine.BuildToday(md, d2, out var todayMistakes);
 Check(todayMistakes.Single() == wrongAgain, "mistakes: today's words switch to the mistake day right away");
@@ -322,19 +358,14 @@ Check(MistakeDays.Active(md, d2.AddDays(1)) is not null && MistakeDays.Active(md
     "mistakes: a missed mistake day is dropped the next day (words stay in the lists), so the course is never held up");
 Check(MistakeDays.Schedule(new AppData(), d1, d0) == 0, "mistakes: nothing to schedule without wrong words");
 
-// ---- a mistake day chosen after the course already moved that morning ----
+// ---- a mistake day does not hold back a learned day ----
 var pz = new AppData();
 SeedData.EnsureSeeded(pz);
-pz.Position.DayStartedOn = d0;
-CourseEngine.Advance(pz, d1);                       // morning of d1: day 2
-MistakeDays.Record(pz, [pz.Plans[0].Words[0]], d1);
-MistakeDays.Schedule(pz, d1, d1);                   // later on d1: "Học hôm nay"
-CourseEngine.Advance(pz, d1);
-var pzToday = CourseEngine.BuildToday(pz, d1, out var pzFresh);
-CourseEngine.ApplySession(pz, pzToday.Select(w => (w, true)).ToList(), pzFresh, d1.AddHours(20));
-var dayOnD2 = (CourseEngine.Advance(pz, d2), pz.Position.Day).Item2;
-var dayOnD3 = (CourseEngine.Advance(pz, d0.AddDays(3)), pz.Position.Day).Item2;
-Check(dayOnD2 == 2 && dayOnD3 == 3, "mistakes: a course day whose date went to a mistake day is studied the next day, not skipped");
+MistakeDays.Record(pz, [pz.Plans[0].Words[30]], d0);
+MistakeDays.Schedule(pz, d0, d0);
+foreach (var w in CourseEngine.DayWords(pz)) CourseEngine.MarkLearned(pz, w, d0.AddHours(9));
+Check(CourseEngine.Advance(pz, d0) && pz.Position.Day == 2 && MistakeDays.Active(pz, d0) is not null,
+    "mistakes: learning every word of the day moves the course on, even on a mistake day");
 
 // ---- mistake lists ----
 var ml = new AppData();
@@ -427,10 +458,9 @@ Check(ReviewScheduler.IsWrongToday(forgotten, d0) && forgotten.Review!.Due == d0
       && lr.MistakeLists.Single().Title == MistakeDays.SessionTitle(d0) && lr.MistakeLists.Single().WordIds.Contains(forgotten.Id),
     "not remembered: review tomorrow, shown first today, kept in today's mistake list");
 foreach (var w in CourseEngine.DayWords(lr)) CourseEngine.MarkLearned(lr, w, d0.AddHours(12));
-Check(CourseEngine.CompleteIfAllLearned(lr, d0) && lr.Position.DayCompleted && !CourseEngine.CompleteIfAllLearned(lr, d0),
-    "learned: a day with every word learned counts as done");
-CourseEngine.Advance(lr, d0.AddDays(1));
-Check(lr.Position.Day == 2, "learned: next day the course moves on");
+Check(CourseEngine.Advance(lr, d0) && lr.Position.Day == 2, "learned: a day with every word learned moves on right away");
+CourseEngine.UnmarkLearned(learnedWord);
+Check(!CourseEngine.Advance(lr, d0) && lr.Position.Day == 2, "learned: unmarking a word of an earlier day does not move the course back");
 
 // ---- Từ của tôi (Ctrl+Alt+V) ----
 Check(QuickAdd.Normalize("  “Serendipity.” ") == "serendipity" && QuickAdd.Normalize("Look  Up\n") == "look up" && QuickAdd.Normalize("NASA") == "NASA"
@@ -499,23 +529,6 @@ Check(CourseEngine.BuildToday(sw, d0, out var swFresh).Contains(saved1!) && !swF
 Check(QuickAdd.SaveWord(sw, "flummox", "", "", "x", "", d0) is null && QuickAdd.SaveWord(sw, sw.Plans[0].Words[0].Text, "", "", "x", "", d0) is null
       && QuickAdd.SaveWord(sw, "quokka", "", "", "  ", "", d0) is null && QuickAdd.SaveWord(sw, "v2.8.0", "", "", "x", "", d0) is null,
     "my words: no save for words already in the library, without a meaning, or not a word");
-
-// ---- day finished: study the next day now ----
-var sn = new AppData();
-SeedData.EnsureSeeded(sn);
-var snDay1 = CourseEngine.BuildToday(sn, d0, out var snFresh);
-CourseEngine.ApplySession(sn, snDay1.Select(w => (w, true)).ToList(), snFresh, d0.AddHours(9));
-Check(CourseEngine.NextDay(sn) is var (np1, nd1) && np1 == sn.Plans[0] && nd1 == 2, "next day: day 2 of the same plan");
-Check(CourseEngine.StudyNextDayNow(sn, d0) && sn.Position.Day == 2 && !sn.Position.DayCompleted
-      && CourseEngine.BuildToday(sn, d0, out var snNow).Count > 0 && snNow.All(w => w.Day == 2),
-    "study next now: day 2 starts the same date, with its new words");
-Check(!CourseEngine.Advance(sn, d0) && CourseEngine.Advance(sn, d1) && sn.Position.Day == 3,
-    "study next now: the next date still moves on by one day");
-sn.Position.Day = 7;
-Check(CourseEngine.NextDay(sn) is var (np2, nd2) && np2 == sn.Plans[1] && nd2 == 1, "next day after the last day: the next plan, day 1");
-MistakeDays.Record(sn, [sn.Plans[0].Words[0]], d1);
-MistakeDays.Schedule(sn, d1, d1);
-Check(!CourseEngine.StudyNextDayNow(sn, d1), "study next now: not on a mistake day");
 
 // ---- fields from a newer version survive a save by this one ----
 var fwFolder = Path.Combine(Path.GetTempPath(), "voca-fw-" + Guid.NewGuid().ToString("N"));
@@ -590,6 +603,50 @@ Check(!File.Exists(exe + ".old") && Directory.GetFiles(upDir).Length == 0, "upda
 Directory.Delete(upDir, true);
 Check(!Updater.Enabled(@"D:\PersonalProject\voca\bin\Release\net8.0-windows\Voca.exe") && Updater.Enabled(@"D:\Apps\Voca\Voca.exe"),
     "update: builds run from bin\\ never update themselves");
+
+// ---- subtitles from a video ----
+var subs = new List<SubtitleLine>
+{
+    new(TimeSpan.FromSeconds(1.5), TimeSpan.FromSeconds(4), " The committee postponed the meeting. "),
+    new(TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(7), "[Music]"),
+    new(TimeSpan.FromMinutes(61).Add(TimeSpan.FromMilliseconds(5)), TimeSpan.FromMinutes(61.1), "Sarah said we're postponing it again, honestly."),
+    new(TimeSpan.FromMinutes(62), TimeSpan.FromMinutes(62.1), "Meetings get postponed. Delays happen. Postpone nothing, Sarah!")
+};
+var cleanSubs = Subtitles.Clean(subs);
+Check(cleanSubs.Count == 3 && cleanSubs[0].Text == "The committee postponed the meeting.", "subtitles: sound tags and empty lines are dropped, text trimmed");
+var srt = Subtitles.ToSrt(cleanSubs);
+Check(srt.StartsWith("1\r\n00:00:01,500 --> 00:00:04,000\r\nThe committee postponed the meeting.\r\n\r\n2\r\n01:01:00,005 --> ")
+      && Subtitles.ReadSrt(srt).SequenceEqual(cleanSubs) && Subtitles.ReadSrt(srt.Replace("\r\n", "\n")).Count == 3,
+    "subtitles: .srt timestamps (hours, milliseconds) and reading it back");
+var vw = new AppData();
+SeedData.EnsureSeeded(vw);
+vw.Plans[0].Words.Add(new Word { Day = 1, Text = "delay", Meaning = "sự chậm trễ" });
+var videoWords = Subtitles.NewWords(vw, cleanSubs);
+var vwTexts = videoWords.Select(w => w.Text).ToList();
+Check(vwTexts.Contains("postpone") && videoWords.Single(w => w.Text == "postpone").Count == 4
+      && videoWords.Single(w => w.Text == "postpone").Example == "The committee postponed the meeting.",
+    "subtitles: forms of a word are counted together under the base form heard, with its first line as example");
+Check(!vwTexts.Contains("delays") && !vwTexts.Contains("delay"), "subtitles: a word already in the library is left out, whatever its form");
+Check(!vwTexts.Contains("sarah") && !vwTexts.Contains("Sarah"), "subtitles: names are left out");
+Check(!vwTexts.Contains("the") && !vwTexts.Contains("meetings") && !vwTexts.Contains("happen") && !vwTexts.Contains("we're"),
+    "subtitles: very common words and contractions are left out");
+Check(vwTexts.Contains("committee") && vwTexts.Contains("honestly") && vwTexts[0] == "postpone", "subtitles: other new words are kept, most frequent first");
+Check(Subtitles.BaseForms("studied").Contains("study") && Subtitles.BaseForms("stopped").Contains("stop") && Subtitles.BaseForms("making").Contains("make")
+      && Subtitles.BaseForms("boxes").Contains("box"), "subtitles: base forms of simple inflections");
+var videoPrompt = Subtitles.BuildPrompt("Bài nói", videoWords.Take(3).ToList(), 2);
+Check(videoPrompt.Contains("# Tên bộ từ: Bài nói") && videoPrompt.Contains("- postpone — \"The committee postponed the meeting.\"")
+      && videoPrompt.Contains("chia thành 1 ngày, mỗi ngày 5 từ"), "subtitles: prompt lists the words with their line from the video");
+var videoAnswer = """
+    # Tên bộ từ: Bài nói
+    ## Ngày 1 — Họp hành
+    | STT | Từ | Phiên âm | Loại | Nghĩa | Ví dụ |
+    |---|---|---|---|---|---|
+    | 1 | postpone | /pəˈspəʊn/ | v | hoãn lại | The committee postponed the meeting. |
+    | 2 | delay | /dɪˈleɪ/ | n | sự chậm trễ | Delays happen. |
+    """;
+var (videoRead, videoSkipped) = Subtitles.ReadPlan(vw, videoAnswer, "Bài nói", 2, 20);
+Check(videoRead.CanImport && videoRead.Plan!.Words.Single().Text == "postpone" && videoSkipped.SequenceEqual(["delay"]),
+    "subtitles: words of the AI answer already in the library are skipped");
 
 Console.WriteLine(fails == 0 ? "\nALL PASSED" : $"\n{fails} FAILED");
 return fails == 0 ? 0 : 1;

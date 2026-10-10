@@ -13,7 +13,8 @@ namespace Voca;
 
 /// <summary>
 /// The daily session: flip through today's new words, then a multiple-choice quiz over the new words
-/// and due reviews. The quiz result drives spaced repetition (wrong answers return tomorrow).
+/// and due reviews. The quiz result drives spaced repetition (wrong answers return tomorrow); on the result
+/// screen words can be ticked "Đã thuộc" (applied when the window closes).
 /// </summary>
 public partial class SessionWindow : Window
 {
@@ -33,19 +34,32 @@ public partial class SessionWindow : Window
     private int _index;
     private bool _flipped;
     private readonly SessionMode _mode;
-    /// <summary>Choices offered on the result screen (e.g. go on to the next day, take a test).</summary>
-    private readonly IReadOnlyList<(string Label, Action Run)> _nextSteps;
+    /// <summary>Marks the words ticked "Đã thuộc" on the result screen.</summary>
+    private readonly Action<IReadOnlyList<Word>> _onLearned;
+    private List<ResultRow> _results = [];
     private string? _picked;
 
-    private sealed record ResultRow(string Mark, Brush MarkBrush, string Word, string Meaning, string Next);
+    private sealed class ResultRow(Word source, bool correct, string mark, Brush markBrush, string meaning, string next)
+    {
+        public Word Source { get; } = source;
+        public bool Correct { get; } = correct;
+        public string Mark { get; } = mark;
+        public Brush MarkBrush { get; } = markBrush;
+        public string Word => Source.Text;
+        public string Meaning { get; } = meaning;
+        public string Next { get; } = next;
+        public bool Learned { get; set; }
+        public Visibility LearnedVisibility => Source.Learned ? Visibility.Collapsed : Visibility.Visible;
+    }
 
     public SessionWindow(AppData data, IReadOnlyList<Word> newWords, IReadOnlyList<Word> reviews, string courseText,
         Action<IReadOnlyList<(Word Word, bool Correct)>, IReadOnlyCollection<Word>> onFinished, Action<string> speak,
-        SessionMode mode = SessionMode.Course, IReadOnlyList<(string Label, Action Run)>? nextSteps = null)
+        Action<IReadOnlyList<Word>> onLearned, SessionMode mode = SessionMode.Course)
     {
         InitializeComponent();
         _mode = mode;
-        _nextSteps = nextSteps ?? [];
+        _onLearned = onLearned;
+        Closed += (_, _) => ApplyLearned();
         if (mode is SessionMode.MistakeDay or SessionMode.Practice) StageLearnText.Text = "Xem lại từ sai";
         _newWords = newWords.ToList();
         _learn = newWords.ToList();
@@ -224,27 +238,37 @@ public partial class SessionWindow : Window
                 ? "Tuyệt vời, đúng hết! Lịch ôn tập đã được giãn ra."
                 : "Từ làm sai sẽ quay lại vào ngày mai và xuất hiện trước trên taskbar hôm nay."
         };
-        ResultList.ItemsSource = _answers.Select(a =>
+        _results = _answers.Select(a =>
         {
             var due = a.Word.Review?.Due.Date ?? today.AddDays(1);
             var days = (due - today).Days;
             var next = days <= 1 ? "ôn lại ngày mai" : $"ôn lại sau {days} ngày";
-            return new ResultRow(a.Correct ? "✓" : "✗", a.Correct ? Good : Bad, a.Word.Text, $"  ·  {a.Word.Meaning}", next);
+            return new ResultRow(a.Word, a.Correct, a.Correct ? "✓" : "✗", a.Correct ? Good : Bad, $"  ·  {a.Word.Meaning}", next);
         }).ToList();
+        ResultList.ItemsSource = _results;
+        LearnedPanel.Visibility = _results.Any(r => !r.Source.Learned) ? Visibility.Visible : Visibility.Collapsed;
+        TickCorrectButton.Visibility = _results.Any(r => r.Correct) ? Visibility.Visible : Visibility.Collapsed;
+        LearnedHint.Text = _mode == SessionMode.Course
+            ? "Tích “Đã thuộc” cho từ bạn đã nhớ chắc. Thuộc hết từ của ngày thì lộ trình sang ngày tiếp."
+            : "Tích “Đã thuộc” cho từ bạn đã nhớ chắc — từ đó sẽ không hiện nữa.";
         BackButton.Visibility = Visibility.Collapsed;
         NextButton.IsEnabled = true;
         NextButton.Content = "Xong";
-        NextStepsPanel.Visibility = _nextSteps.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        NextStepsButtons.Children.Clear();
-        for (var i = 0; i < _nextSteps.Count; i++)
-        {
-            var (label, run) = _nextSteps[i];
-            var button = new Button { Content = label, Padding = new Thickness(12, 6, 12, 6) };
-            if (i == 0) { button.Background = (Brush)FindResource("Accent"); button.Foreground = System.Windows.Media.Brushes.White; button.FontWeight = FontWeights.SemiBold; }
-            button.Click += (_, _) => { Close(); run(); };
-            NextStepsButtons.Children.Add(button);
-        }
         FooterText.Text = "Đã lưu kết quả.";
+    }
+
+    private void TickCorrect_Click(object sender, RoutedEventArgs e)
+    {
+        foreach (var row in _results.Where(r => r.Correct)) row.Learned = true;
+        ResultList.Items.Refresh();
+    }
+
+    /// <summary>Saves the "Đã thuộc" ticks once, when the window closes (so a tick can still be cleared before).</summary>
+    private void ApplyLearned()
+    {
+        var learned = _results.Where(r => r.Learned && !r.Source.Learned).Select(r => r.Source).Distinct().ToList();
+        _results = [];
+        if (learned.Count > 0) _onLearned(learned);
     }
 
     private void Next_Click(object sender, RoutedEventArgs e) => GoNext();

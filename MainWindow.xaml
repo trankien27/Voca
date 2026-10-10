@@ -29,13 +29,16 @@
                         <Button DockPanel.Dock="Right" Content="⚙" Click="Settings_Click" ToolTip="Cấu hình" />
                         <Button DockPanel.Dock="Right" Content="📝" Click="Test_Click" ToolTip="Tạo bài kiểm tra" />
                         <Button DockPanel.Dock="Right" Content="📊" Click="Stats_Click" ToolTip="Thống kê" />
-                        <Border x:Name="KindBadge" DockPanel.Dock="Top" HorizontalAlignment="Left" CornerRadius="6"
-                                Padding="7,1" Margin="0,0,0,4" Background="#EEF4FF">
-                            <TextBlock x:Name="KindText" FontSize="10" FontWeight="SemiBold" Foreground="#3555C0" MaxWidth="190" TextTrimming="CharacterEllipsis"/>
+                        <Button DockPanel.Dock="Right" Content="🎬" Click="Video_Click" ToolTip="Phụ đề từ video (tạo .srt, lấy từ mới để học)" />
+                        <Border x:Name="KindBadge" HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="6"
+                                Padding="7,1" Background="#EEF4FF">
+                            <TextBlock x:Name="KindText" FontSize="10" FontWeight="SemiBold" Foreground="#3555C0" TextTrimming="CharacterEllipsis"/>
                         </Border>
-                        <TextBlock x:Name="DetailWord" FontSize="24" FontWeight="Bold" Foreground="{StaticResource Ink}"
-                                   TextWrapping="Wrap" />
                     </DockPanel>
+                    <!-- The word stays on one line; a long phrase shrinks to fit instead of wrapping. -->
+                    <Viewbox StretchDirection="DownOnly" HorizontalAlignment="Left" Margin="0,6,0,0">
+                        <TextBlock x:Name="DetailWord" FontSize="24" FontWeight="Bold" Foreground="{StaticResource Ink}" TextWrapping="NoWrap" />
+                    </Viewbox>
                     <StackPanel Orientation="Horizontal" Margin="0,3,0,10">
                         <TextBlock x:Name="PhoneticText" FontSize="14" Foreground="{StaticResource Accent}" />
                         <TextBlock x:Name="PartOfSpeechText" FontSize="13" FontStyle="Italic" Foreground="{StaticResource Muted}" Margin="8,0,0,0" />
@@ -46,7 +49,7 @@
                     </Border>
                     <WrapPanel x:Name="QuickRatePanel" Margin="-3,-4,0,8">
                         <Button Content="✓ Đã thuộc" Click="Learned_Click" Background="#E7F7EE" Foreground="#067647" Padding="10,5"
-                                ToolTip="Không hiện từ này nữa (không vào phiên học và ôn tập). Hoàn tác được."/>
+                                ToolTip="Không hiện từ này nữa (không vào phiên học và ôn tập). Thuộc hết từ của ngày thì sang ngày tiếp. Hoàn tác được."/>
                         <Button Content="✗ Chưa nhớ" Click="NotRemembered_Click" Background="#FDECEA" Foreground="#B42318" Padding="10,5"
                                 ToolTip="Tính là trả lời sai: ôn lại ngày mai, hôm nay hiện trước trên taskbar"/>
                     </WrapPanel>
@@ -61,21 +64,15 @@
                             <TextBlock x:Name="CourseEyebrow" FontSize="10" FontWeight="Bold" Foreground="{StaticResource Accent}" TextTrimming="CharacterEllipsis"/>
                             <UniformGrid x:Name="WeekDots" Rows="1" Margin="-2,6,-2,6"/>
                             <TextBlock x:Name="CourseStatusText" FontSize="12" Foreground="{StaticResource Ink}" TextWrapping="Wrap"/>
-                            <StackPanel x:Name="NextChoicePanel" Visibility="Collapsed" Margin="0,8,0,0">
-                                <TextBlock x:Name="NextChoiceText" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Ink}" TextWrapping="Wrap"/>
-                                <UniformGrid Columns="2" Margin="-3,4,-3,0">
-                                    <Button x:Name="StudyNextButton" Click="StudyNext_Click" Background="{StaticResource Accent}" Foreground="White"
-                                            FontWeight="SemiBold" Padding="6,7" ToolTip="Sang ngày tiếp theo ngay bây giờ và mở phiên học"/>
-                                    <Button x:Name="TestDoneDaysButton" Click="TestDoneDays_Click" Padding="6,7"
-                                            ToolTip="Kiểm tra các ngày đã học của lộ trình này"/>
-                                </UniformGrid>
-                            </StackPanel>
                             <Button x:Name="SessionButton" Content="Bắt đầu phiên học" Click="Session_Click" Margin="0,8,0,0"
                                     Background="{StaticResource Accent}" Foreground="White" HorizontalAlignment="Stretch"/>
                         </StackPanel>
                     </Border>
                     <Button x:Name="UpdateLink" Click="UpdateLink_Click" Visibility="Collapsed" HorizontalAlignment="Stretch"
                             HorizontalContentAlignment="Left" Background="#ECFDF3" Foreground="#05603A" Padding="10,6" Margin="0,0,0,8" FontSize="12"/>
+                    <Button x:Name="CatchUpLink" Click="CatchUp_Click" Visibility="Collapsed" HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Left" Background="#F0EEFF" Foreground="#4B3CC4" Padding="10,6" Margin="0,0,0,8" FontSize="12"
+                            ToolTip="Lật thẻ rồi kiểm tra các từ của ngày đã bỏ qua; sau đó chúng vào lịch ôn tập"/>
                     <Button x:Name="MistakesLink" Click="MistakesLink_Click" Visibility="Collapsed" HorizontalAlignment="Stretch"
                             HorizontalContentAlignment="Left" Background="#FFF6ED" Foreground="#93370D" Padding="10,6" Margin="0,0,0,8" FontSize="12"/>
                     <Border x:Name="MistakePanel" Background="#FFF6ED" CornerRadius="10" Padding="10,8" Margin="0,0,0,8" Visibility="Collapsed">

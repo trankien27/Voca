@@ -44,6 +44,7 @@ public partial class LibraryWindow : Window
         _openStats = actions.OpenStats;
         MistakesTab.Content = new MistakesView(store, actions);
         MyWordsTab.Content = new MyWordsView(store, actions);
+        VideoTab.Content = new VideoView(store);
         // The version list is fetched the first time Settings is opened.
         Tabs.SelectionChanged += (_, e) =>
         {
@@ -67,6 +68,9 @@ public partial class LibraryWindow : Window
 
     /// <summary>Brings the "Từ của tôi" tab to the front.</summary>
     public void ShowMyWords() => Tabs.SelectedItem = MyWordsTab;
+
+    /// <summary>Brings the "Phụ đề video" tab to the front.</summary>
+    public void ShowVideo() => Tabs.SelectedItem = VideoTab;
 
     /// <summary>Brings Settings → "Cập nhật phiên bản" to the front.</summary>
     public void ShowUpdates()
