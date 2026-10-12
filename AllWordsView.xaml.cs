@@ -82,7 +82,7 @@ public partial class AllWordsView : System.Windows.Controls.UserControl
         var today = DateTime.Today;
         var keep = SelectedRows.Select(r => r.Entry.Word.Id).ToHashSet();
         var entries = AllWords.Find(data, today, SearchBox.Text,
-            Tag<WordFilter>(StatusBox), (PlanFilterBox.SelectedItem as PlanChoice)?.Id, Tag<WordSort>(SortBox));
+            ChosenTag<WordFilter>(StatusBox), (PlanFilterBox.SelectedItem as PlanChoice)?.Id, ChosenTag<WordSort>(SortBox));
         var rows = entries.Select(e => Row(e, today)).ToList();
         WordsGrid.ItemsSource = rows;
         foreach (var row in rows.Where(r => keep.Contains(r.Entry.Word.Id))) WordsGrid.SelectedItems.Add(row);
@@ -91,7 +91,7 @@ public partial class AllWordsView : System.Windows.Controls.UserControl
         ShowCount();
     }
 
-    private static T Tag<T>(System.Windows.Controls.ComboBox box) where T : struct, Enum =>
+    private static T ChosenTag<T>(System.Windows.Controls.ComboBox box) where T : struct, Enum =>
         (box.SelectedItem as ComboBoxItem)?.Tag is string tag && Enum.TryParse<T>(tag, out var value) ? value : default;
 
     private static WordRow Row(WordEntry entry, DateTime today)
