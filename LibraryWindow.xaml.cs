@@ -14,7 +14,7 @@ namespace Voca;
 /// Everything that used to live on the web page: the course order, editing plans, creating a topic
 /// from an AI prompt + pasted form, and settings. Works on the shared <see cref="Store"/>.
 /// </summary>
-public partial class LibraryWindow : Window
+public partial class LibraryWindow : Wpf.Ui.Controls.FluentWindow
 {
     private static readonly Brush DoneWash = Frozen(0xE7, 0xF7, 0xEE), DoneInk = Frozen(0x06, 0x76, 0x47);
     private static readonly Brush NowWash = Frozen(0x6C, 0x5C, 0xE7), NowInk = Frozen(0xFF, 0xFF, 0xFF);

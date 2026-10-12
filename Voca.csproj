@@ -9,7 +9,7 @@
     <AssemblyName>Voca</AssemblyName>
     <RootNamespace>Voca</RootNamespace>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <Version>2.13.0</Version>
+    <Version>2.14.0</Version>
     <Product>Voca</Product>
   </PropertyGroup>
   <ItemGroup>
@@ -18,9 +18,12 @@
     <PackageReference Include="Whisper.net" Version="1.9.1" />
     <!-- Its build step would copy native libraries for every platform next to the exe; only win-x64 is embedded below. -->
     <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" GeneratePathProperty="true" ExcludeAssets="build" />
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
   </ItemGroup>
   <ItemGroup>
     <!-- Ready-made plans imported on first run, in course order. -->
+    <!-- Window title bars show the app icon (pack://application:,,,/Voca;component/app.ico). -->
+    <Resource Include="app.ico" />
     <EmbeddedResource Include="Seed\*.md" LogicalName="Seed.%(Filename)%(Extension)" />
     <!-- Whisper's native libraries travel inside Voca.exe and are unpacked on first use (Services\Transcriber.cs). -->
     <EmbeddedResource Include="$(PkgWhisper_net_Runtime)\build\win-x64\*.dll" LogicalName="Whisper.%(Filename)%(Extension)" Visible="false" />

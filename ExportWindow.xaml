@@ -15,8 +15,9 @@
             </WrapPanel>
         </StackPanel>
         <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
-            <CheckBox x:Name="IncludeProgressBox" IsChecked="True" Margin="0,0,0,10"
-                      Content="Kèm tiến độ học (lịch ôn từng từ, streak, vị trí đang học) — chỉ áp dụng cho file .voca"/>
+            <CheckBox x:Name="IncludeProgressBox" IsChecked="True" Margin="0,0,0,10">
+                <TextBlock TextWrapping="Wrap" Text="Kèm tiến độ học (lịch ôn từng từ, streak, vị trí đang học) — chỉ áp dụng cho file .voca"/>
+            </CheckBox>
             <WrapPanel>
                 <Button Content="Lưu file .voca…" Click="SaveFile_Click" Background="{StaticResource Accent}" Foreground="White"/>
                 <Button Content="Sao chép dạng văn bản" Click="CopyText_Click"

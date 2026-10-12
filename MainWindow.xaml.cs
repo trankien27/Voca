@@ -386,7 +386,7 @@ public partial class MainWindow : Window
         var skipped = MistakeDays.Active(_data, DateTime.Today) is null ? CourseEngine.SkippedDay(_data) : null;
         CatchUpLink.Visibility = skipped is null ? Visibility.Collapsed : Visibility.Visible;
         if (skipped is var (day, words))
-            CatchUpLink.Content = $"↺ Ngày {day} chưa học ({words.Count} từ) · Học bù";
+            CatchUpLink.Content = $"Ngày {day} chưa học ({words.Count} từ) · Học bù";
     }
 
     private void CatchUp_Click(object sender, RoutedEventArgs e)
@@ -419,7 +419,7 @@ public partial class MainWindow : Window
         var upcoming = MistakeDays.Upcoming(_data, today);
         var waiting = MistakeDays.Waiting(_data).Count;
         MistakesLink.Visibility = waiting > 0 ? Visibility.Visible : Visibility.Collapsed;
-        MistakesLink.Content = $"📋 {waiting} từ sai · Xem danh sách và học lại";
+        MistakesLink.Content = $"{waiting} từ sai · Xem danh sách và học lại";
         void Buttons(string? todayText, string? tomorrowText, bool cancel)
         {
             MistakeTodayButton.Visibility = todayText is null ? Visibility.Collapsed : Visibility.Visible;
@@ -989,7 +989,7 @@ public partial class MainWindow : Window
     {
         var known = Version.TryParse(_data.Settings.AvailableVersion, out var available) && Updater.IsNewer(available, Updater.Current);
         UpdateLink.Visibility = known ? Visibility.Visible : Visibility.Collapsed;
-        UpdateLink.Content = known ? $"⬆ Có Voca {available!.ToString(3)} · Xem và cập nhật" : "";
+        UpdateLink.Content = known ? $"Có Voca {available!.ToString(3)} · Xem và cập nhật" : "";
         if (_updatesMenuItem is not null)
             _updatesMenuItem.Text = known ? $"⬆ Có Voca {available!.ToString(3)} — cập nhật…" : "Cập nhật phiên bản…";
     }

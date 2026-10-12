@@ -12,6 +12,9 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        // WPF-UI controls (focus lines, check boxes, sliders, selections) follow Voca's purple, not the Windows accent.
+        Wpf.Ui.Appearance.ApplicationAccentColorManager.Apply(
+            System.Windows.Media.Color.FromRgb(0x6C, 0x5C, 0xE7), Wpf.Ui.Appearance.ApplicationTheme.Light);
         // Started by an update: let the previous version exit and release the single-instance lock first.
         Services.Updater.WaitForPreviousProcess(e.Args);
         _singleInstanceMutex = new System.Threading.Mutex(true, @"Local\Voca2.SingleInstance", out var isFirstInstance);
