@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:local="clr-namespace:Voca"
-             Loaded="View_Loaded" Unloaded="View_Unloaded">
+             Loaded="View_Loaded">
     <UserControl.Resources>
         <Style x:Key="Card" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}"/><Setter Property="CornerRadius" Value="10"/>
@@ -26,6 +26,8 @@
                         Background="{StaticResource Accent}" Foreground="White"
                         ToolTip="Lật thẻ rồi trắc nghiệm các từ đang chọn (Ctrl/Shift để chọn nhiều). Không ảnh hưởng bài học hôm nay."/>
                 <Button Content="Mở trong Sửa lộ trình" local:UiIcon.Symbol="Edit24" Click="OpenInEditor_Click"/>
+                <Button Content="Kiểm tra từ trùng" local:UiIcon.Symbol="DocumentCopy24" Click="CheckDuplicates_Click"
+                        ToolTip="Tìm các từ có mặt hơn một lần trong thư viện (khác lộ trình hoặc khác ngày, không phân biệt hoa thường và dấu câu ở cuối)."/>
             </WrapPanel>
             <TextBlock x:Name="StatusText" Foreground="{StaticResource Muted}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="10,0,0,0"/>
         </DockPanel>
@@ -36,7 +38,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" MinWidth="220"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <ui:TextBox x:Name="SearchBox" PlaceholderText="Tìm từ hoặc nghĩa (gõ không dấu cũng được)" TextChanged="Filter_Changed">
+                    <ui:TextBox x:Name="SearchBox" PlaceholderText="Tìm từ hoặc nghĩa (gõ không dấu cũng được)" TextChanged="Search_Changed">
                         <ui:TextBox.Icon><ui:SymbolIcon Symbol="Search24"/></ui:TextBox.Icon>
                     </ui:TextBox>
                     <ComboBox x:Name="StatusBox" Grid.Column="1" Width="150" Margin="8,0,0,0" SelectedIndex="0" SelectionChanged="Filter_Changed">
@@ -46,6 +48,7 @@
                         <ComboBoxItem Content="Đang học" Tag="Learning"/>
                         <ComboBoxItem Content="Đến hạn ôn" Tag="Due"/>
                         <ComboBoxItem Content="Đã thuộc / nhớ lâu" Tag="Known"/>
+                        <ComboBoxItem x:Name="DuplicateItem" Content="Từ trùng" Tag="Duplicate"/>
                     </ComboBox>
                     <ComboBox x:Name="PlanFilterBox" Grid.Column="2" Width="210" Margin="8,0,0,0" DisplayMemberPath="Name" SelectionChanged="Filter_Changed"/>
                     <ComboBox x:Name="SortBox" Grid.Column="3" Width="170" Margin="8,0,0,0" SelectedIndex="0" SelectionChanged="Filter_Changed">
@@ -63,7 +66,8 @@
                               CanUserAddRows="False" CanUserResizeRows="False" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
                               RowHeaderWidth="0" BorderThickness="0" Background="Transparent"
                               EnableRowVirtualization="True" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
-                              MouseDoubleClick="WordsGrid_MouseDoubleClick" SelectionChanged="WordsGrid_SelectionChanged">
+                              MouseDoubleClick="WordsGrid_MouseDoubleClick" SelectionChanged="WordsGrid_SelectionChanged" Sorting="WordsGrid_Sorting"
+                              ScrollViewer.ScrollChanged="WordsGrid_ScrollChanged">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Từ" Binding="{Binding Text}" Width="1.1*" FontWeight="SemiBold"/>
                             <DataGridTextColumn Header="Phiên âm" Binding="{Binding Phonetic}" Width="1*"/>

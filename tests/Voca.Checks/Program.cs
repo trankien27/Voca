@@ -744,6 +744,18 @@ Check(AllWords.Find(aw, d0, planId: aw.Plans[1].Id).All(e => e.Plan == aw.Plans[
       && AllWords.Find(aw, d0, sort: WordSort.MostForgotten)[0].Word == awWrong
       && AllWords.Find(aw, d0)[0].Plan == CourseEngine.CoursePlans(aw).First(),
     "all words: plan filter; order by course, last seen, most forgotten");
+var awCopy = new Word { Day = 2, Text = "  " + awSchool.Text.ToUpperInvariant() + ". " };
+var awOther = aw.Plans[1].Words[5];
+var awOtherCopy = new Word { Day = 1, Text = awOther.Text };
+aw.Plans[1].Words.Add(awCopy);
+aw.Plans[2].Words.Add(awOtherCopy);
+var awDuplicates = AllWords.Find(aw, d0, filter: WordFilter.Duplicate);
+Check(AllWords.DuplicateKeys(aw).Count == 2 && awDuplicates.Select(e => e.Word).ToHashSet().SetEquals([awSchool, awCopy, awOther, awOtherCopy])
+      && Math.Abs(awDuplicates.FindIndex(e => e.Word == awSchool) - awDuplicates.FindIndex(e => e.Word == awCopy)) == 1,
+    "all words: duplicates ignore case, spaces and end punctuation, across plans; copies listed side by side");
+Check(AllWords.Find(aw, d0, filter: WordFilter.Duplicate, planId: aw.Plans[1].Id).Select(e => e.Word).ToHashSet().SetEquals([awCopy, awOther])
+      && AllWords.DuplicateKeys(new AppData { Plans = [new Plan { Words = [new Word { Text = "a" }, new Word { Text = "b" }] }] }).Count == 0,
+    "all words: a copy in another plan still counts when filtering one plan; no duplicates → none found");
 
 Console.WriteLine(fails == 0 ? "\nALL PASSED" : $"\n{fails} FAILED");
 return fails == 0 ? 0 : 1;

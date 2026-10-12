@@ -18,7 +18,7 @@ public enum WordStatus
     Learned,
 }
 
-public enum WordFilter { All, Seen, New, Learning, Due, Known }
+public enum WordFilter { All, Seen, New, Learning, Due, Known, Duplicate }
 
 public enum WordSort { Course, Recent, Alphabet, MostForgotten }
 
@@ -45,14 +45,25 @@ public static class AllWords
         return [.. course, .. data.Plans.Where(p => !course.Contains(p))];
     }
 
+    /// <summary>
+    /// Texts (as <see cref="QuickAdd.Key"/>) written more than once in the library, in any plans or days:
+    /// "Look up", "look up." and "LOOK UP" are the same word.
+    /// </summary>
+    public static HashSet<string> DuplicateKeys(AppData data) =>
+        data.Plans.SelectMany(p => p.Words).GroupBy(w => QuickAdd.Key(w.Text)).Where(g => g.Count() > 1).Select(g => g.Key).ToHashSet();
+
     public static List<WordEntry> Find(AppData data, DateTime today, string query = "", WordFilter filter = WordFilter.All,
         Guid? planId = null, WordSort sort = WordSort.Course)
     {
         var plans = PlansInOrder(data);
+        var duplicates = filter == WordFilter.Duplicate ? DuplicateKeys(data) : null;
         var entries = plans
             .Where(p => planId is null || p.Id == planId)
             .SelectMany(p => p.Words.OrderBy(w => w.Day).Select(w => new WordEntry(w, p, StatusOf(w, today))))
-            .Where(e => Matches(e, filter) && Matches(e.Word, query.Trim()));
+            .Where(e => (duplicates?.Contains(QuickAdd.Key(e.Word.Text)) ?? Matches(e, filter)) && Matches(e.Word, query.Trim()));
+        // Copies of a word sit together (in course order), so they can be compared and the extra ones removed.
+        if (duplicates is not null && sort == WordSort.Course)
+            return entries.OrderBy(e => QuickAdd.Key(e.Word.Text), StringComparer.CurrentCultureIgnoreCase).ToList();
         return sort switch
         {
             WordSort.Recent => entries.OrderByDescending(e => LastSeen(e.Word) ?? DateTime.MinValue).ToList(),

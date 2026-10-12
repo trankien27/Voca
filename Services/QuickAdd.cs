@@ -44,7 +44,8 @@ public static partial class QuickAdd
     [GeneratedRegex(@"\s+")]
     private static partial Regex Whitespace();
 
-    private static string Key(string text) => (Normalize(text) ?? text.Trim()).ToLowerInvariant();
+    /// <summary>What two texts must share to be the same word: cleaned like <see cref="Normalize"/>, any case.</summary>
+    internal static string Key(string text) => (Normalize(text) ?? text.Trim()).ToLowerInvariant();
 
     /// <summary>The plan and word in the library with the same text (any plan, learned or not).</summary>
     public static (Plan Plan, Word Word)? FindInLibrary(AppData data, string text)
