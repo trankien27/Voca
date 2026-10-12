@@ -123,6 +123,9 @@
                 </Grid>
             </TabItem>
 
+            <!-- ================= All words ================= -->
+            <TabItem Header="Tất cả từ" local:UiIcon.Symbol="TextBulletListSquare24" x:Name="AllWordsTab"/>
+
             <!-- ================= Plan editor ================= -->
             <TabItem Header="Sửa lộ trình" local:UiIcon.Symbol="Edit24" x:Name="EditTab">
                 <DockPanel>

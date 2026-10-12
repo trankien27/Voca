@@ -42,6 +42,7 @@ public partial class LibraryWindow : Wpf.Ui.Controls.FluentWindow
         _store = store;
         _actions = actions;
         _openStats = actions.OpenStats;
+        AllWordsTab.Content = new AllWordsView(store, actions, ShowWordInEditor);
         MistakesTab.Content = new MistakesView(store, actions);
         MyWordsTab.Content = new MyWordsView(store, actions);
         VideoTab.Content = new VideoView(store);
@@ -161,6 +162,16 @@ public partial class LibraryWindow : Wpf.Ui.Controls.FluentWindow
         if (planId is null) return;
         RefreshPlanBox(select: Data.Plans.FirstOrDefault(p => p.Id == planId));
         Tabs.SelectedItem = EditTab;
+    }
+
+    /// <summary>Opens "Sửa lộ trình" on the word's plan and day, with the word selected.</summary>
+    private void ShowWordInEditor(Plan plan, Word word)
+    {
+        RefreshPlanBox(select: plan);
+        RefreshDays(select: word.Day);
+        Tabs.SelectedItem = EditTab;
+        WordsGrid.SelectedItem = word;
+        Dispatcher.BeginInvoke(() => WordsGrid.ScrollIntoView(word), System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     // =============================== plan editor ===============================

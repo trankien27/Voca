@@ -717,5 +717,33 @@ Check(!setA.Pending && setA.PlanId == readA.Plan!.Id && Subtitles.PendingSetFor(
 Check(Subtitles.DropPendingSet(ws, setB) && !Subtitles.DropPendingSet(ws, setA) && Subtitles.NewWords(ws, linesB).Any(w => w.Text == "honestly"),
     "word sets: dropping a pending set frees its words; an imported set cannot be dropped");
 
+// ---------- all words ----------
+var aw = new AppData();
+SeedData.EnsureSeeded(aw);
+var awPlan = aw.Plans[0];
+var (awRight, awWrong, awMarked, awLong) = (awPlan.Words[0], awPlan.Words[1], awPlan.Words[2], awPlan.Words[3]);
+ReviewScheduler.Rate(aw, awRight, true, d0.AddDays(-1));
+ReviewScheduler.Rate(aw, awWrong, false, d0.AddDays(-1));
+awMarked.Learned = true; awMarked.LearnedOn = d0;
+awLong.Review = new ReviewState { Reps = 4, IntervalDays = 30, Due = d0.AddDays(30), LastReviewed = d0.AddDays(-2) };
+Check(AllWords.Find(aw, d0).Count == aw.Plans.Sum(p => p.Words.Count), "all words: every word of every plan is listed");
+Check(AllWords.StatusOf(awRight, d0) == WordStatus.Learning && AllWords.StatusOf(awWrong, d0) == WordStatus.Due
+      && AllWords.StatusOf(awMarked, d0) == WordStatus.Learned && AllWords.StatusOf(awLong, d0) == WordStatus.Mastered
+      && AllWords.StatusOf(awPlan.Words[4], d0) == WordStatus.New,
+    "all words: status is learned / mastered / due / learning / new");
+Check(AllWords.Find(aw, d0, filter: WordFilter.Seen).Select(e => e.Word).ToHashSet().SetEquals([awRight, awWrong, awMarked, awLong])
+      && AllWords.Find(aw, d0, filter: WordFilter.Known).Count == 2 && AllWords.Find(aw, d0, filter: WordFilter.Due).Single().Word == awWrong
+      && AllWords.Find(aw, d0, filter: WordFilter.Learning).Count == 2,
+    "all words: filters seen, known (marked or mastered), due, learning (incl. due)");
+var awSchool = awPlan.Words.First(w => w.Meaning.Contains("trường học"));
+Check(AllWords.Find(aw, d0, "truong hoc").Any(e => e.Word == awSchool) && AllWords.Find(aw, d0, "SCHOOL").Any(e => e.Word == awSchool)
+      && AllWords.Matches(new Word { Text = "x", Meaning = "đồng phục" }, "dong phuc"),
+    "all words: search by word or meaning ignores case and accents (incl. đ)");
+Check(AllWords.Find(aw, d0, planId: aw.Plans[1].Id).All(e => e.Plan == aw.Plans[1])
+      && AllWords.Find(aw, d0, sort: WordSort.Recent)[0].Word == awMarked
+      && AllWords.Find(aw, d0, sort: WordSort.MostForgotten)[0].Word == awWrong
+      && AllWords.Find(aw, d0)[0].Plan == CourseEngine.CoursePlans(aw).First(),
+    "all words: plan filter; order by course, last seen, most forgotten");
+
 Console.WriteLine(fails == 0 ? "\nALL PASSED" : $"\n{fails} FAILED");
 return fails == 0 ? 0 : 1;
