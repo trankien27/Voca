@@ -157,6 +157,34 @@ public static partial class Subtitles
         return parts;
     }
 
+    // ---------- reading ----------
+
+    /// <summary>
+    /// Groups the lines (in time order) into paragraphs for reading as prose: a new paragraph after a pause of
+    /// <paramref name="pause"/> (2 s by default) between two lines, or once a paragraph has
+    /// <paramref name="maxLines"/> lines and the last one ends a sentence; never more than twice that.
+    /// </summary>
+    public static List<List<SubtitleLine>> Paragraphs(IReadOnlyList<SubtitleLine> lines, TimeSpan? pause = null, int maxLines = 8)
+    {
+        var gap = pause ?? TimeSpan.FromSeconds(2);
+        var paragraphs = new List<List<SubtitleLine>>();
+        List<SubtitleLine>? current = null;
+        foreach (var line in lines)
+        {
+            if (current is not null)
+            {
+                var last = current[^1];
+                var full = current.Count >= maxLines && EndsSentence(last.Text) || current.Count >= maxLines * 2;
+                if (line.Start - last.End >= gap || full) current = null;
+            }
+            if (current is null) paragraphs.Add(current = []);
+            current.Add(line);
+        }
+        return paragraphs;
+    }
+
+    private static bool EndsSentence(string text) => text.TrimEnd('"', '\'', '”', '’', ')', ' ') is [.., '.' or '?' or '!' or '…'];
+
     // ---------- words to learn ----------
 
     /// <summary>

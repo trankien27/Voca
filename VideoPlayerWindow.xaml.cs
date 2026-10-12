@@ -15,32 +15,45 @@ namespace Voca;
 /// <summary>
 /// Plays a video with its subtitles on top. New words of the video are bold yellow (click: save to "Từ của
 /// tôi"), words being learned bold violet (hover: meaning), saved words green. Hovering the subtitle pauses
-/// so it can be read.
+/// so it can be read; "Đọc phụ đề" opens all of them as a text to read. Where the video stands is saved every
+/// few seconds while it plays and on pause, close and end, so it resumes at that second next time (even after
+/// a crash) — see <see cref="WatchProgress"/>.
 /// </summary>
 public partial class VideoPlayerWindow : Window
 {
     private static readonly Brush NewInk = Frozen(0xFF, 0xC9, 0x4D), LearningInk = Frozen(0xB9, 0xAE, 0xFF), WaitingInk = Frozen(0x7E, 0xE2, 0xA8);
 
     private readonly Store _store;
+    private readonly string _name;
+    private readonly string _videoPath;
     private readonly IReadOnlyList<SubtitleLine> _lines;
     private readonly IReadOnlyList<VideoWord> _newWords;
     private readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private readonly DispatcherTimer _toastTimer = new() { Interval = TimeSpan.FromSeconds(3) };
+    /// <summary>Saves the position while playing, so a crash or power cut loses a few seconds at most.</summary>
+    private readonly DispatcherTimer _saveTimer = new() { Interval = TimeSpan.FromSeconds(5) };
     private WordMarker _marker;
     private SubtitleLine? _shown;
-    private bool _playing, _seeking, _pausedByHover, _fullScreen;
+    private bool _playing, _seeking, _pausedByHover, _fullScreen, _finished;
+    /// <summary>Where to jump once the video is open (where it was left off last time).</summary>
+    private TimeSpan _start;
     private WindowState _stateBeforeFullScreen;
 
-    public VideoPlayerWindow(Store store, string videoPath, IReadOnlyList<SubtitleLine> lines, IReadOnlyList<VideoWord> newWords)
+    public VideoPlayerWindow(Store store, string videoPath, IReadOnlyList<SubtitleLine> lines, IReadOnlyList<VideoWord> newWords,
+        TimeSpan start = default)
     {
         InitializeComponent();
         _store = store;
         _lines = lines.OrderBy(l => l.Start).ToList();
         _newWords = newWords;
         _marker = new WordMarker(store.Data, newWords);
+        _name = Path.GetFileNameWithoutExtension(videoPath);
+        _videoPath = videoPath;
+        _start = start;
         Title = $"Voca · {Path.GetFileName(videoPath)}";
         _tick.Tick += (_, _) => Update();
         _toastTimer.Tick += (_, _) => { Toast.Visibility = Visibility.Collapsed; _toastTimer.Stop(); };
+        _saveTimer.Tick += (_, _) => SaveProgress();
         Media.Source = new Uri(videoPath);
         // MediaElement only opens its source once it is part of a shown window.
         ContentRendered += (_, _) => Play();
@@ -52,23 +65,34 @@ public partial class VideoPlayerWindow : Window
     {
         Media.Play();
         _playing = true;
+        _finished = false;
         _pausedByHover = false;
         PlayButton.Content = "⏸";
         _tick.Start();
+        _saveTimer.Start();
     }
 
     private void Pause()
     {
         Media.Pause();
         _playing = false;
+        _saveTimer.Stop();
         PlayButton.Content = "▶";
         Update();
     }
 
     private void TogglePlay()
     {
-        if (_playing) Pause();
-        else Play();
+        if (!_playing) { Play(); return; }
+        Pause();
+        SaveProgress();
+    }
+
+    /// <summary>Remembers where the video stands, for the next time it is played and for "Xem tiếp".</summary>
+    private void SaveProgress(TimeSpan? at = null)
+    {
+        if (!Media.NaturalDuration.HasTimeSpan) return; // never opened (or failed): nothing to resume
+        WatchProgress.Record(_store.Folder, _videoPath, at ?? Media.Position, Media.NaturalDuration.TimeSpan, DateTime.Now);
     }
 
     private void SeekTo(TimeSpan time)
@@ -81,12 +105,20 @@ public partial class VideoPlayerWindow : Window
     private void Media_Opened(object sender, RoutedEventArgs e)
     {
         Seek.Maximum = Media.NaturalDuration.HasTimeSpan ? Media.NaturalDuration.TimeSpan.TotalSeconds : 1;
+        if (_start > TimeSpan.Zero)
+        {
+            Media.Position = _start;
+            ShowToast($"Xem tiếp từ {Clock(_start)} · ← lùi 5 giây, kéo thanh thời gian để xem từ đầu");
+            _start = TimeSpan.Zero;
+        }
         Update();
     }
 
     private void Media_Ended(object sender, RoutedEventArgs e)
     {
         Pause();
+        if (Media.NaturalDuration.HasTimeSpan) SaveProgress(Media.NaturalDuration.TimeSpan);
+        _finished = true;
         Media.Position = TimeSpan.Zero;
     }
 
@@ -108,7 +140,7 @@ public partial class VideoPlayerWindow : Window
         ShowLine(Subtitles.LineAt(_lines, now));
     }
 
-    private static string Clock(TimeSpan t) => t.TotalHours >= 1 ? t.ToString(@"h\:mm\:ss") : t.ToString(@"m\:ss");
+    internal static string Clock(TimeSpan t) => t.TotalHours >= 1 ? t.ToString(@"h\:mm\:ss") : t.ToString(@"m\:ss");
 
     // ---------------------------------- subtitle ----------------------------------
 
@@ -151,17 +183,23 @@ public partial class VideoPlayerWindow : Window
     {
         e.Handled = true;
         if (e.OriginalSource is not Run { Tag: SubtitlePart { Mark: WordMark.New } part }) return;
+        ShowToast(SaveNewWord(_store, part.Text));
+        _marker = new WordMarker(_store.Data, _newWords);
+        ShowLine(_shown, force: true);
+    }
+
+    /// <summary>Saves a new word of a video to "Từ của tôi" (waiting for its meaning) and says what happened.</summary>
+    internal static string SaveNewWord(Store store, string text)
+    {
         QuickAddResult? result = null;
-        _store.Update(d => result = QuickAdd.Add(d, part.Text, DateTime.Now));
-        ShowToast(result switch
+        store.Update(d => result = QuickAdd.Add(d, text, DateTime.Now));
+        return result switch
         {
             { Added: true } => $"Đã lưu “{result.Text}” vào Từ của tôi. Mở Thư viện → Từ của tôi để nhờ AI điền nghĩa.",
             { AlreadyWaiting: true } => $"“{result.Text}” đã nằm trong Từ của tôi.",
             { ExistingPlan: { } plan } => $"“{result.Text}” đã có trong {plan.Name}.",
-            _ => $"Không lưu được “{part.Text}”."
-        });
-        _marker = new WordMarker(_store.Data, _newWords);
-        ShowLine(_shown, force: true);
+            _ => $"Không lưu được “{text}”."
+        };
     }
 
     private void Subtitle_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
@@ -200,6 +238,13 @@ public partial class VideoPlayerWindow : Window
         var start = _lines.LastOrDefault(l => l.Start < now - TimeSpan.FromSeconds(1))?.Start ?? TimeSpan.Zero;
         SeekTo(start);
         if (!_playing) Play();
+    }
+
+    /// <summary>Pauses and opens every line of the video as a text to read.</summary>
+    private void Read_Click(object sender, RoutedEventArgs e)
+    {
+        if (_playing) Pause();
+        new SubtitleReaderWindow(_store, _name, _lines, _newWords).Show();
     }
 
     private void Seek_MouseDown(object sender, MouseButtonEventArgs e) => _seeking = true;
@@ -247,6 +292,7 @@ public partial class VideoPlayerWindow : Window
             case Key.Right: SeekTo(Media.Position + TimeSpan.FromSeconds(5)); break;
             case Key.F: SetFullScreen(!_fullScreen); break;
             case Key.Escape when _fullScreen: SetFullScreen(false); break;
+            case Key.R: Read_Click(this, e); break;
             case Key.C: SubtitleToggle.IsChecked = SubtitleToggle.IsChecked != true; SubtitleToggle_Click(this, e); break;
             default: return;
         }
@@ -255,6 +301,8 @@ public partial class VideoPlayerWindow : Window
 
     private void Window_Closed(object? sender, EventArgs e)
     {
+        if (!_finished) SaveProgress();
+        _saveTimer.Stop();
         _tick.Stop();
         _toastTimer.Stop();
         Media.Close();

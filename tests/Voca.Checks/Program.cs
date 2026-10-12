@@ -669,6 +669,52 @@ Check(!marks.ContainsKey(learnedAlready.Text.ToLowerInvariant()) && !marks.Conta
     "player: learned and common words stay plain");
 Check(marks["honestly"] == WordMark.New && marks["postponed"] == WordMark.New && marks["committee"] == WordMark.Waiting,
     "player: the video's new words are marked (any form); words saved to “Từ của tôi” show as waiting");
+SubtitleLine Cue(double from, double to, string text) => new(TimeSpan.FromSeconds(from), TimeSpan.FromSeconds(to), text);
+var talk = new List<SubtitleLine> { Cue(0, 2, "So we went"), Cue(2.2, 4, "to the market."), Cue(7, 9, "It was closed!"), Cue(9.1, 10, "Again.") };
+var paragraphs = Subtitles.Paragraphs(talk);
+Check(paragraphs.Count == 2 && paragraphs[0].SequenceEqual(talk.Take(2)) && paragraphs[1].SequenceEqual(talk.Skip(2)),
+    "reading: lines join into paragraphs, a new one after a pause of 2 s or more");
+var nonstop = Enumerable.Range(0, 20).Select(i => Cue(i, i + 1, i == 9 ? "end of a sentence." : "and then")).ToList();
+var long1 = Subtitles.Paragraphs(nonstop);
+var noStop = Subtitles.Paragraphs(Enumerable.Range(0, 20).Select(i => Cue(i, i + 1, "and then")).ToList());
+Check(long1[0].Count == 10 && long1.Sum(p => p.Count) == 20 && noStop.Select(p => p.Count).SequenceEqual([16, 4]) && Subtitles.Paragraphs([]).Count == 0,
+    "reading: a long paragraph breaks at a sentence end after 8 lines, and after 16 lines at the latest");
+
+// ---------- continue watching ----------
+var wp = new WatchHistory();
+string[] episodes = [@"D:\Film\Show_E1.mkv", @"D:\Film\Show_E2.mkv", @"D:\Film\Show_E10.mkv", @"D:\Film\Show_E2.srt", @"D:\Film\notes.txt"];
+IEnumerable<string> Folder(string _) => episodes.Reverse();
+bool OnDisk(string path) => episodes.Contains(path, StringComparer.OrdinalIgnoreCase);
+var minutes24 = TimeSpan.FromMinutes(24);
+Check(WatchProgress.Continue(wp, OnDisk, Folder) is null && WatchProgress.ResumeAt(wp, episodes[0]) == TimeSpan.Zero,
+    "watch: nothing to continue before any video is played");
+WatchProgress.Save(wp, episodes[0], TimeSpan.FromSeconds(754.5), minutes24, d0);
+Check(WatchProgress.ResumeAt(wp, @"d:\film\SHOW_E1.mkv") == TimeSpan.FromSeconds(754.5)
+      && WatchProgress.Continue(wp, OnDisk, Folder) == new ContinueWatching(episodes[0], TimeSpan.FromSeconds(754.5), false),
+    "watch: a video resumes at the exact second it was left off (path in any case)");
+WatchProgress.Save(wp, episodes[0], minutes24 - TimeSpan.FromSeconds(10), minutes24, d0);
+Check(WatchProgress.ResumeAt(wp, episodes[0]) == TimeSpan.Zero && wp.Videos.Count == 1
+      && WatchProgress.Continue(wp, OnDisk, Folder) == new ContinueWatching(episodes[1], TimeSpan.Zero, true),
+    "watch: watched to the end (last 30 s) → next time from the start, and “Xem tiếp” opens the next episode");
+WatchProgress.Save(wp, episodes[1], minutes24, minutes24, d0);
+Check(WatchProgress.Continue(wp, OnDisk, Folder)?.Video == episodes[2] && WatchProgress.NextEpisode(episodes[2], Folder) is null,
+    "watch: episodes follow natural order (E2 before E10), only media files; none after the last");
+WatchProgress.Save(wp, @"D:\Film\Gone.mkv", TimeSpan.FromMinutes(3), minutes24, d0);
+Check(WatchProgress.Continue(wp, OnDisk, Folder)?.Video == episodes[2] && wp.Videos[0].Video == @"D:\Film\Gone.mkv",
+    "watch: a video no longer on disk is skipped for the one watched before it");
+WatchProgress.Save(wp, episodes[1], TimeSpan.FromSeconds(3), minutes24, d0);
+Check(WatchProgress.ResumeAt(wp, episodes[1]) == TimeSpan.Zero && WatchProgress.Continue(wp, OnDisk, Folder)?.Start == TimeSpan.FromSeconds(3),
+    "watch: replaying a finished video starts over; barely begun (under 5 s) plays from the start");
+var watchDir = Directory.CreateTempSubdirectory("voca-watch").FullName;
+Check(WatchProgress.Load(watchDir).Videos.Count == 0 && WatchProgress.Record(watchDir, episodes[0], TimeSpan.FromSeconds(42), minutes24, d0)
+      && WatchProgress.Record(watchDir, episodes[1], TimeSpan.FromSeconds(7), minutes24, d0)
+      && WatchProgress.Load(watchDir).Videos.Select(v => v.Video).SequenceEqual([episodes[1], episodes[0]])
+      && WatchProgress.ResumeAt(WatchProgress.Load(watchDir), episodes[0]) == TimeSpan.FromSeconds(42)
+      && !File.Exists(Path.Combine(watchDir, WatchProgress.FileName + ".tmp")),
+    "watch: positions are kept in watch.json, newest first, with no temp file left behind");
+File.WriteAllText(Path.Combine(watchDir, WatchProgress.FileName), "{ broken");
+Check(WatchProgress.Load(watchDir).Videos.Count == 0, "watch: an unreadable watch.json starts an empty history instead of failing");
+Directory.Delete(watchDir, true);
 
 // ---- one word set per video, no word offered twice ----
 var ws = new AppData();

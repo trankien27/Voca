@@ -76,6 +76,7 @@ public partial class VideoView : System.Windows.Controls.UserControl
 
     private void View_Loaded(object sender, RoutedEventArgs e)
     {
+        ShowContinue();
         // Loaded fires again on every return to the tab; hook the window once.
         if (_host is not null) return;
         _host = Window.GetWindow(this);
@@ -213,18 +214,63 @@ public partial class VideoView : System.Windows.Controls.UserControl
         WordsList.ItemsSource = _words;
     }
 
-    private static readonly string[] VideoExtensions = [".mp4", ".m4v", ".mkv", ".mov", ".avi", ".wmv", ".webm", ".mp3", ".m4a", ".wav"];
 
     /// <summary>The video with the same name as a subtitle file, if one sits next to it.</summary>
     private static string? VideoNextTo(string srt) =>
-        VideoExtensions.Select(ext => Path.ChangeExtension(srt, ext)).FirstOrDefault(File.Exists);
+        WatchProgress.MediaExtensions.Select(ext => Path.ChangeExtension(srt, ext)).FirstOrDefault(File.Exists);
 
-    /// <summary>Plays the video with the subtitles; new words of the video and words being learned stand out.</summary>
+    /// <summary>
+    /// Plays the video with the subtitles (from where it was left off last time); new words of the video and
+    /// words being learned stand out.
+    /// </summary>
     private void PlayVideo_Click(object sender, RoutedEventArgs e)
     {
         if (_videoPath is null || _lines.Count == 0) return;
-        var newWords = Subtitles.NewWords(_store.Data, _lines);
-        new VideoPlayerWindow(_store, _videoPath, _lines, newWords).Show();
+        Play(_videoPath, WatchProgress.ResumeAt(WatchProgress.Load(_store.Folder), _videoPath));
+    }
+
+    private void Play(string video, TimeSpan start)
+    {
+        var player = new VideoPlayerWindow(_store, video, _lines, Subtitles.NewWords(_store.Data, _lines), start);
+        player.Closed += (_, _) => ShowContinue(); // the player saved where it stopped
+        player.Show();
+    }
+
+    /// <summary>"Xem tiếp": the last video at the second it was left off, or the next episode once it was finished.</summary>
+    private void Continue_Click(object sender, RoutedEventArgs e)
+    {
+        if (WatchProgress.Continue(WatchProgress.Load(_store.Folder)) is not { } next) { ShowContinue(); return; }
+        _queue.Clear();
+        QueuePanel.Visibility = Visibility.Collapsed;
+        OpenFile(next.Video);
+        Play(next.Video, next.Start); // plays without subtitles when the video has no .srt yet
+    }
+
+    private void ShowContinue()
+    {
+        var next = WatchProgress.Continue(WatchProgress.Load(_store.Folder));
+        ContinueButton.Visibility = next is null ? Visibility.Collapsed : Visibility.Visible;
+        if (next is null) return;
+        var name = Path.GetFileNameWithoutExtension(next.Video);
+        ContinueText.Text = next.NextEpisode ? $"Xem tập tiếp: {name}" : $"Xem tiếp: {name} · {VideoPlayerWindow.Clock(next.Start)}";
+        ContinueButton.ToolTip = next.NextEpisode
+            ? $"Tập trước đã xem hết. Mở tập tiếp theo trong thư mục:\n{next.Video}"
+            : $"Mở lại video xem gần nhất, đúng chỗ đã dừng ({VideoPlayerWindow.Clock(next.Start)}):\n{next.Video}";
+    }
+
+    /// <summary>Opens the subtitles as a text to read; with none open yet, asks for an .srt first (no video needed).</summary>
+    private void Read_Click(object sender, RoutedEventArgs e)
+    {
+        if (_lines.Count == 0)
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Phụ đề SubRip (*.srt)|*.srt" };
+            if (dialog.ShowDialog(_host) != true) return;
+            _queue.Clear();
+            QueuePanel.Visibility = Visibility.Collapsed;
+            OpenFile(dialog.FileName);
+            if (_lines.Count == 0) return;
+        }
+        new SubtitleReaderWindow(_store, Path.GetFileNameWithoutExtension(Source!), _lines, Subtitles.NewWords(_store.Data, _lines)).Show();
     }
 
     private void ModelBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
@@ -430,6 +476,7 @@ public partial class VideoView : System.Windows.Controls.UserControl
         var isMedia = _mediaPath is not null && !_mediaPath.EndsWith(".srt", StringComparison.OrdinalIgnoreCase);
         RunButton.IsEnabled = !busy && (_queue.Count > 1 || isMedia);
         PlayVideoButton.IsEnabled = _videoPath is not null && !busy && _lines.Count > 0;
+        ReadButton.IsEnabled = !busy;
         SaveButton.IsEnabled = isMedia && !busy && _lines.Count > 0;
         OpenFolderButton.IsEnabled = _mediaPath is not null;
         FindWordsButton.IsEnabled = !busy && _lines.Count > 0;

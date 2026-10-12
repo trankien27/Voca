@@ -35,6 +35,36 @@ public sealed class AppData
 }
 
 /// <summary>
+/// Where each watched video was left off, most recent first; "Xem tiếp" resumes the first one. Kept in its own
+/// small file (watch.json), not in <see cref="AppData"/>: it is saved every few seconds while a video plays, and
+/// the paths only make sense on this computer.
+/// </summary>
+public sealed class WatchHistory
+{
+    /// <summary>Fields written by a newer Voca; kept as they are so going back a version loses nothing.</summary>
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
+
+    public List<VideoProgress> Videos { get; set; } = [];
+}
+
+/// <summary>How far a video has been watched on this computer.</summary>
+public sealed class VideoProgress
+{
+    /// <summary>Fields written by a newer Voca; kept as they are so going back a version loses nothing.</summary>
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
+
+    /// <summary>Full path of the video.</summary>
+    public string Video { get; set; } = "";
+    /// <summary>Where playing stopped, in seconds from the start.</summary>
+    public double Seconds { get; set; }
+    /// <summary>Length of the video in seconds (0 when unknown).</summary>
+    public double LengthSeconds { get; set; }
+    /// <summary>Played to the end (or to its last half minute).</summary>
+    public bool Finished { get; set; }
+    public DateTime WatchedAt { get; set; }
+}
+
+/// <summary>
 /// The words picked from one video. While <see cref="PlanId"/> is null the set waits for the AI's answer and
 /// its words count as taken (other videos do not offer them again); once imported it points to its plan.
 /// </summary>

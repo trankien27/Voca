@@ -48,6 +48,7 @@
                     <Button x:Name="PlayButton" Style="{StaticResource Control}" Content="▶" Click="Play_Click" ToolTip="Phát / dừng (Space)"/>
                     <Button Style="{StaticResource Control}" Content="⟲ 5s" Click="Back_Click" ToolTip="Lùi 5 giây (←)"/>
                     <Button Style="{StaticResource Control}" Content="⏮ câu" Click="PreviousLine_Click" ToolTip="Nghe lại câu trước"/>
+                    <Button Style="{StaticResource Control}" Content="Đọc phụ đề" Click="Read_Click" ToolTip="Dừng video và mở toàn bộ phụ đề thành bài đọc (R)"/>
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <TextBlock x:Name="TimeText" Foreground="#C9C9D6" FontFamily="Consolas" FontSize="12" VerticalAlignment="Center" Margin="10,0,10,0" Text="0:00 / 0:00"/>
