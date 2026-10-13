@@ -196,6 +196,8 @@ public sealed class Word
     public string PartOfSpeech { get; set; } = "";
     public string Meaning { get; set; } = "";
     public string Example { get; set; } = "";
+    /// <summary>Vietnamese translation of <see cref="Example"/>, so the learner sees how the sentence is translated.</summary>
+    public string ExampleMeaning { get; set; } = "";
     /// <summary>When the word was first studied in a session.</summary>
     public DateTime? IntroducedOn { get; set; }
     /// <summary>Spaced-repetition state; null until the word is answered in a quiz.</summary>

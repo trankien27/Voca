@@ -156,7 +156,7 @@ public static partial class Transfer
         DayTitles = new Dictionary<int, string>(plan.DayTitles),
         Words = plan.Words.Select(w =>
         {
-            var copy = new Word { Day = w.Day, Text = w.Text, Phonetic = w.Phonetic, PartOfSpeech = w.PartOfSpeech, Meaning = w.Meaning, Example = w.Example };
+            var copy = new Word { Day = w.Day, Text = w.Text, Phonetic = w.Phonetic, PartOfSpeech = w.PartOfSpeech, Meaning = w.Meaning, Example = w.Example, ExampleMeaning = w.ExampleMeaning };
             if (withProgress) CopyProgress(w, copy);
             return copy;
         }).ToList()

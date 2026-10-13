@@ -171,6 +171,18 @@ var roundTrip = PlanFormat.Read(PlanFormat.ToMarkdown(data.Plans[0]));
 Check(roundTrip.CanImport && roundTrip.Plan!.Words.Count == 140 && roundTrip.Plan.DayTitles.Count == 7 && roundTrip.Plan.Name == data.Plans[0].Name, "export → import round trip keeps every word and day title");
 var prompt = PlanFormat.BuildPrompt(new PlanRequest("Du lịch", 7, 20, "A2–C1", "", "Du lịch — 7 ngày × 20 từ"));
 Check(prompt.Contains("7 ngày, mỗi ngày đúng 20 từ") && prompt.Contains("# Tên bộ từ: Du lịch — 7 ngày × 20 từ") && prompt.Contains("```markdown"), "prompt asks for the exact form");
+var translated = PlanFormat.Read(PlanFormat.Example).Plan!;
+var withTranslation = PlanFormat.Read("# Tên bộ từ: T\n## Ngày 1\n| 1 | delay /dɪˈleɪ/ | n | sự chậm trễ | Our flight had a delay. | Chuyến bay bị chậm trễ. |").Plan!;
+var jsonTranslated = PlanFormat.Read("""{"name":"J","days":[{"day":1,"words":[{"word":"cat","meaning":"mèo","example":"A cat.","exampleMeaning":"Một con mèo."}]}]}""").Plan!;
+Check(translated.Words[1].ExampleMeaning == "Chuyến bay của chúng tôi bị chậm trễ hai tiếng." && withTranslation.Words[0].ExampleMeaning == "Chuyến bay bị chậm trễ."
+      && jsonTranslated.Words[0].ExampleMeaning == "Một con mèo." && rp.Words.All(w => w.ExampleMeaning == ""),
+    "form: the 7th column (and JSON exampleMeaning) is the example's translation; 6-column forms still read");
+var withMeaning = new Plan { Name = "T", Words = [new Word { Text = "delay", Meaning = "sự chậm trễ", Example = "A | delay.", ExampleMeaning = "Một sự | chậm trễ." }] };
+var withMeaningBack = PlanFormat.Read(PlanFormat.ToMarkdown(withMeaning)).Plan!.Words[0];
+Check(withMeaningBack.ExampleMeaning == "Một sự | chậm trễ." && withMeaningBack.Meaning == "sự chậm trễ" && withMeaningBack.Example == "A | delay."
+      && new[] { prompt, Subtitles.BuildPrompt("V", [new VideoWord("x", 1, "x")], 20), QuickAdd.BuildPrompt(["x"], d0) }
+          .All(p => p.Contains(PlanFormat.TableHeader) && p.Contains("Dịch ví dụ: bản dịch tiếng Việt") && !p.Contains("| Ví dụ |\n")),
+    "export → import keeps the translation (also for a word without phonetic); every AI prompt (topic, video, my words) asks for it");
 
 // ---------- storage ----------
 var folder = Path.Combine(Path.GetTempPath(), "voca-checks-" + Guid.NewGuid().ToString("N"));

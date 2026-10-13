@@ -199,6 +199,7 @@
                                         <DataGridTextColumn Header="Loại" Binding="{Binding PartOfSpeech, UpdateSourceTrigger=LostFocus}" Width="0.5*"/>
                                         <DataGridTextColumn Header="Nghĩa" Binding="{Binding Meaning, UpdateSourceTrigger=LostFocus}" Width="1.5*"/>
                                         <DataGridTextColumn Header="Ví dụ" Binding="{Binding Example, UpdateSourceTrigger=LostFocus}" Width="2*"/>
+                                        <DataGridTextColumn Header="Dịch ví dụ" Binding="{Binding ExampleMeaning, UpdateSourceTrigger=LostFocus}" Width="2*"/>
                                         <DataGridTemplateColumn Header="Đã thuộc" Width="Auto">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>

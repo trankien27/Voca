@@ -394,7 +394,7 @@ public static partial class Subtitles
         sb.AppendLine($"Tạo bộ từ vựng tiếng Anh cho người Việt từ {words.Count} từ xuất hiện trong một video. Giữ đúng thứ tự, không thêm hay bớt từ, chia thành {days} ngày, mỗi ngày {perDay} từ (ngày cuối có thể ít hơn).");
         sb.AppendLine("Danh sách (từ — câu trong video):");
         foreach (var w in words) sb.AppendLine($"- {w.Text} — \"{w.Example.Replace('"', '\'')}\"");
-        sb.AppendLine("""
+        sb.AppendLine($"""
 
             Quy tắc cho mỗi từ:
             - Từ: dạng gốc của từ (động từ nguyên thể, danh từ số ít), viết thường trừ danh từ riêng.
@@ -402,14 +402,14 @@ public static partial class Subtitles
             - Loại: n, v, adj, adv, phr v, phr, prep, conj
             - Nghĩa: nghĩa tiếng Việt ngắn gọn, đúng với nghĩa trong câu của video.
             - Ví dụ: dùng câu trong video nếu rõ nghĩa, nếu không thì viết một câu tự nhiên có dùng từ đó.
+            {PlanFormat.ExampleMeaningRule}
             - Không dùng ký tự | bên trong ô.
             Chỉ trả lời bằng MỘT khối code markdown theo đúng form sau, không giải thích gì thêm. STT đánh liên tục qua các ngày:
             """);
         sb.AppendLine("```markdown");
         sb.AppendLine($"# Tên bộ từ: {name}").AppendLine("Cấp độ: <cấp độ ước lượng, ví dụ B1–B2>").AppendLine("Mô tả: Từ vựng lấy từ video").AppendLine();
         sb.AppendLine("## Ngày 1 — <tiêu đề tiếng Việt ngắn>").AppendLine();
-        sb.AppendLine("| STT | Từ | Phiên âm | Loại | Nghĩa | Ví dụ |").AppendLine("|---|---|---|---|---|---|");
-        sb.AppendLine("| 1 | <từ> | /<IPA>/ | <loại> | <nghĩa> | <câu ví dụ> |");
+        sb.AppendLine(PlanFormat.TableHeader).AppendLine(PlanFormat.TableSeparator).AppendLine(PlanFormat.TableRowTemplate);
         if (days > 1) sb.AppendLine().AppendLine("## Ngày 2 — <tiêu đề tiếng Việt ngắn>").AppendLine("...");
         sb.AppendLine("```");
         if (days > 1)

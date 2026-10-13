@@ -46,6 +46,8 @@
             <TextBox x:Name="MeaningBox"/>
             <TextBlock Style="{StaticResource Label}" Text="Ví dụ (không bắt buộc)"/>
             <TextBox x:Name="ExampleBox" TextWrapping="Wrap" ToolTip="Câu bạn gặp từ này, hoặc một câu tự đặt"/>
+            <TextBlock Style="{StaticResource Label}" Text="Dịch ví dụ (không bắt buộc)"/>
+            <TextBox x:Name="ExampleMeaningBox" TextWrapping="Wrap" ToolTip="Câu ví dụ dịch sang tiếng Việt, hiện khi lật thẻ"/>
         </StackPanel>
 
         <TextBlock x:Name="ErrorText" Foreground="#B42318" TextWrapping="Wrap" Margin="2,8,0,0" Visibility="Collapsed"/>

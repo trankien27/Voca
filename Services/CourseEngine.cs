@@ -254,7 +254,7 @@ public static class CourseEngine
         for (var k = 0; k < forgotten.Count; k++)
         {
             var w = forgotten[k];
-            plan.Words.Add(new Word { Day = k / perDay + 1, Text = w.Text, Phonetic = w.Phonetic, PartOfSpeech = w.PartOfSpeech, Meaning = w.Meaning, Example = w.Example });
+            plan.Words.Add(new Word { Day = k / perDay + 1, Text = w.Text, Phonetic = w.Phonetic, PartOfSpeech = w.PartOfSpeech, Meaning = w.Meaning, Example = w.Example, ExampleMeaning = w.ExampleMeaning });
         }
         data.Plans.Add(plan);
         var current = Current(data)?.Index ?? data.Course.Count - 1;

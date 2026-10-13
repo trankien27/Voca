@@ -45,6 +45,8 @@
                                TextWrapping="Wrap" Margin="0,16,0,0"/>
                     <TextBlock x:Name="CardExample" FontSize="14" FontStyle="Italic" Foreground="{StaticResource Muted}" TextAlignment="Center"
                                TextWrapping="Wrap" Margin="0,8,0,0" MaxWidth="440"/>
+                    <TextBlock x:Name="CardExampleMeaning" FontSize="14" Foreground="{StaticResource Ink}" TextAlignment="Center"
+                               TextWrapping="Wrap" Margin="0,4,0,0" MaxWidth="440"/>
                     <TextBlock x:Name="CardHint" FontSize="12" Foreground="{StaticResource Muted}" TextAlignment="Center" Margin="0,16,0,0"
                                Text="Bấm vào thẻ hoặc nhấn Space để xem nghĩa"/>
                 </StackPanel>

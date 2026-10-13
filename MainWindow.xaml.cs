@@ -301,6 +301,7 @@ public partial class MainWindow : Window
             PhoneticText.Text = "";
             PartOfSpeechText.Text = "";
             MeaningText.Text = empty.Detail;
+            ExampleMeaningText.Text = "";
             SetMeaningCard(card: false, shown: true);
             ExamplePanel.Visibility = Visibility.Collapsed;
             ReviewInfoText.Text = "";
@@ -324,6 +325,7 @@ public partial class MainWindow : Window
         PhoneticText.Text = item.Phonetic;
         PartOfSpeechText.Text = item.PartOfSpeech;
         MeaningText.Text = item.Meaning;
+        ExampleMeaningText.Text = item.ExampleMeaning;
         SetMeaningCard(card: true, shown: _meaningShown == item.Id);
         ExampleText.Text = item.Example;
         ExamplePanel.Visibility = string.IsNullOrWhiteSpace(item.Example) ? Visibility.Collapsed : Visibility.Visible;
@@ -754,9 +756,9 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The meaning as a flash card: face down shows "Bấm để lật", face up the meaning. The meaning keeps its
-    /// space while hidden, so turning the card does not resize the popup. Without a word (empty states) it is
-    /// plain text.
+    /// The meaning as a flash card: face down shows "Bấm để lật", face up the meaning (and the example's
+    /// translation under the example). The meaning keeps its space while hidden, so turning the card does not
+    /// resize the popup. Without a word (empty states) it is plain text.
     /// </summary>
     private void SetMeaningCard(bool card, bool shown)
     {
@@ -769,6 +771,7 @@ public partial class MainWindow : Window
         MeaningCard.ToolTip = !card ? null : shown ? "Bấm để úp thẻ lại" : "Nhớ nghĩa trước, rồi bấm để lật thẻ";
         MeaningText.Visibility = shown ? Visibility.Visible : Visibility.Hidden;
         MeaningCover.Visibility = card && !shown ? Visibility.Visible : Visibility.Collapsed;
+        ExampleMeaningText.Visibility = card && shown && ExampleMeaningText.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>Turns the meaning card over: it narrows to a line, changes face, and opens again.</summary>

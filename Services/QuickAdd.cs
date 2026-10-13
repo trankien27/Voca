@@ -78,7 +78,8 @@ public static partial class QuickAdd
     /// Saves a word written in the Ctrl+Alt+V window to "Từ của tôi" (today's day, created when needed) and
     /// puts it in today's reviews. Null when the text is not a word or the library already has it.
     /// </summary>
-    public static Word? SaveWord(AppData data, string text, string phonetic, string partOfSpeech, string meaning, string example, DateTime now)
+    public static Word? SaveWord(AppData data, string text, string phonetic, string partOfSpeech, string meaning, string example, DateTime now,
+        string exampleMeaning = "")
     {
         var clean = Normalize(text);
         if (clean is null || meaning.Trim().Length == 0 || FindInLibrary(data, clean) is not null) return null;
@@ -93,7 +94,7 @@ public static partial class QuickAdd
         var word = new Word
         {
             Day = day, Text = clean, Phonetic = PlanFormat.NormalizePhonetic(phonetic), PartOfSpeech = partOfSpeech.Trim(),
-            Meaning = meaning.Trim(), Example = example.Trim()
+            Meaning = meaning.Trim(), Example = example.Trim(), ExampleMeaning = exampleMeaning.Trim()
         };
         StartReviewing(word, now);
         plan.Words.Add(word);
@@ -123,7 +124,7 @@ public static partial class QuickAdd
         var sb = new StringBuilder();
         sb.AppendLine($"Điền thông tin cho {words.Count} từ/cụm từ tiếng Anh sau cho người Việt học từ vựng (giữ đúng thứ tự, không thêm hay bớt từ):");
         sb.AppendLine(string.Join(", ", words));
-        sb.AppendLine("""
+        sb.AppendLine($"""
 
             Quy tắc cho mỗi từ:
             - Từ: giữ nguyên như danh sách (viết thường, trừ danh từ riêng và từ viết tắt).
@@ -131,14 +132,14 @@ public static partial class QuickAdd
             - Loại: n, v, adj, adv, phr v, phr, prep, conj
             - Nghĩa: nghĩa tiếng Việt ngắn gọn, phổ biến nhất.
             - Ví dụ: một câu tiếng Anh tự nhiên có dùng từ đó.
+            {PlanFormat.ExampleMeaningRule}
             - Không dùng ký tự | bên trong ô.
             Chỉ trả lời bằng MỘT khối code markdown theo đúng form sau, không giải thích gì thêm:
             """);
         sb.AppendLine("```markdown");
         sb.AppendLine($"# Tên bộ từ: {PlanName}").AppendLine();
         sb.AppendLine($"## Ngày 1 — Từ thêm {now:dd/MM}").AppendLine();
-        sb.AppendLine("| STT | Từ | Phiên âm | Loại | Nghĩa | Ví dụ |").AppendLine("|---|---|---|---|---|---|");
-        sb.AppendLine("| 1 | <từ> | /<IPA>/ | <loại> | <nghĩa> | <câu ví dụ> |");
+        sb.AppendLine(PlanFormat.TableHeader).AppendLine(PlanFormat.TableSeparator).AppendLine(PlanFormat.TableRowTemplate);
         sb.Append("```");
         return sb.ToString();
     }
@@ -169,7 +170,7 @@ public static partial class QuickAdd
             added.Add(new Word
             {
                 Day = day, Text = word.Text.Trim(), Phonetic = word.Phonetic, PartOfSpeech = word.PartOfSpeech,
-                Meaning = word.Meaning, Example = word.Example
+                Meaning = word.Meaning, Example = word.Example, ExampleMeaning = word.ExampleMeaning
             });
         }
         if (added.Count == 0) return new MyWordsImport([], skipped, 0, []);

@@ -58,7 +58,11 @@
                         </Grid>
                     </Border>
                     <Border x:Name="ExamplePanel" Background="{StaticResource Wash}" CornerRadius="8" Padding="10,7" Margin="0,0,0,10">
-                        <TextBlock x:Name="ExampleText" FontSize="13" FontStyle="Italic" Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+                        <StackPanel>
+                            <TextBlock x:Name="ExampleText" FontSize="13" FontStyle="Italic" Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+                            <!-- Shown with the meaning (card turned over): it would give the meaning away. -->
+                            <TextBlock x:Name="ExampleMeaningText" FontSize="13" Foreground="{StaticResource Ink}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                        </StackPanel>
                     </Border>
                     <WrapPanel x:Name="QuickRatePanel" Margin="-3,-4,0,8">
                         <Button Content="Đã thuộc" local:UiIcon.Symbol="Checkmark24" Click="Learned_Click" Background="#E7F7EE" Foreground="#067647" Padding="10,5"

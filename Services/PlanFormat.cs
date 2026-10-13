@@ -31,17 +31,25 @@ public static partial class PlanFormat
 
         ## Ngày 1 — Sân bay và chuyến bay
 
-        | STT | Từ | Phiên âm | Loại | Nghĩa | Ví dụ |
-        |---|---|---|---|---|---|
-        | 1 | boarding pass | /ˈbɔːdɪŋ pɑːs/ | n | thẻ lên máy bay | Please show your boarding pass at the gate. |
-        | 2 | delay | /dɪˈleɪ/ | n | sự chậm trễ | Our flight had a two-hour delay. |
+        | STT | Từ | Phiên âm | Loại | Nghĩa | Ví dụ | Dịch ví dụ |
+        |---|---|---|---|---|---|---|
+        | 1 | boarding pass | /ˈbɔːdɪŋ pɑːs/ | n | thẻ lên máy bay | Please show your boarding pass at the gate. | Vui lòng xuất trình thẻ lên máy bay tại cửa. |
+        | 2 | delay | /dɪˈleɪ/ | n | sự chậm trễ | Our flight had a two-hour delay. | Chuyến bay của chúng tôi bị chậm trễ hai tiếng. |
 
         ## Ngày 2 — Khách sạn và chỗ ở
 
-        | STT | Từ | Phiên âm | Loại | Nghĩa | Ví dụ |
-        |---|---|---|---|---|---|
-        | 3 | check in | /ˌtʃek ˈɪn/ | phr v | nhận phòng | We checked in at three o'clock. |
+        | STT | Từ | Phiên âm | Loại | Nghĩa | Ví dụ | Dịch ví dụ |
+        |---|---|---|---|---|---|---|
+        | 3 | check in | /ˌtʃek ˈɪn/ | phr v | nhận phòng | We checked in at three o'clock. | Chúng tôi nhận phòng lúc ba giờ. |
         """;
+
+    /// <summary>The table every prompt asks for: header, separator and one sample row.</summary>
+    public const string TableHeader = "| STT | Từ | Phiên âm | Loại | Nghĩa | Ví dụ | Dịch ví dụ |";
+    public const string TableSeparator = "|---|---|---|---|---|---|---|";
+    public const string TableRowTemplate = "| 1 | <từ> | /<IPA>/ | <loại> | <nghĩa> | <câu ví dụ> | <dịch câu ví dụ> |";
+
+    /// <summary>The prompt rule for the last column (every word comes with its example translated).</summary>
+    public const string ExampleMeaningRule = "- Dịch ví dụ: bản dịch tiếng Việt tự nhiên của câu ví dụ, trong đó từ được dịch đúng như ở cột Nghĩa.";
 
     // ---------- reading ----------
 
@@ -75,7 +83,7 @@ public static partial class PlanFormat
         if (string.IsNullOrWhiteSpace(plan.Level)) plan.Level = expected?.Level ?? "";
 
         var days = plan.Words.GroupBy(w => w.Day).OrderBy(g => g.Key).ToList();
-        if (plan.Words.Count == 0) errors.Add("Không đọc được từ nào. Kiểm tra form có tiêu đề “## Ngày 1 — …” và bảng 6 cột.");
+        if (plan.Words.Count == 0) errors.Add("Không đọc được từ nào. Kiểm tra form có tiêu đề “## Ngày 1 — …” và bảng 7 cột.");
         if (string.IsNullOrWhiteSpace(plan.Name)) errors.Add("Thiếu tên bộ từ (dòng “# Tên bộ từ: …” ở đầu form).");
         if (days.Count > MaxDays) errors.Add($"Tối đa {MaxDays} ngày.");
         if (plan.Words.Count > MaxWordsPerPlan) errors.Add($"Một bộ từ tối đa {MaxWordsPerPlan} từ.");
@@ -101,6 +109,7 @@ public static partial class PlanFormat
         Missing(w => w.Phonetic, "phiên âm");
         Missing(w => w.Meaning, "nghĩa");
         Missing(w => w.Example, "ví dụ");
+        Missing(w => w.ExampleMeaning, "dịch ví dụ");
         var repeated = plan.Words.GroupBy(w => w.Text.Trim(), StringComparer.OrdinalIgnoreCase)
             .Where(g => g.Select(w => w.Day).Distinct().Count() > 1).Select(g => g.Key).ToList();
         if (repeated.Count > 0) warnings.Add($"Từ lặp lại giữa các ngày: {string.Join(", ", repeated.Take(10))}{(repeated.Count > 10 ? "…" : "")}.");
@@ -108,7 +117,8 @@ public static partial class PlanFormat
     }
 
     /// <summary>
-    /// Rows may be "| # | word /phonetic/ | pos | meaning | example |" or "| # | word | /phonetic/ | pos | meaning | example |".
+    /// Rows may be "| # | word /phonetic/ | pos | meaning | example | translation |" or "| # | word | /phonetic/ | pos |
+    /// meaning | example | translation |"; the example's translation may be missing (older forms).
     /// "## Ngày 2 — Title" (or "Day 2") assigns the following rows to that day; without headings, rows are
     /// split into days of <paramref name="wordsPerDay"/> (all on day 1 when 0). Header lines give name/level/description.
     /// </summary>
@@ -149,17 +159,22 @@ public static partial class PlanFormat
             if (cells.Length < 5 || !int.TryParse(cells[0], out _)) continue;
 
             Word word;
-            if (PhoneticOnly().IsMatch(cells[2]))
+            // A phonetic column: the 3rd cell is /IPA/, or empty (a word exported without phonetic), or the row has
+            // 7 cells. Otherwise the phonetic sits next to the word ("word /IPA/") and the 3rd cell is the type.
+            var phoneticColumn = PhoneticOnly().IsMatch(cells[2]) || cells.Length >= 7 || (cells.Length == 6 && cells[2].Length == 0);
+            if (phoneticColumn)
             {
                 if (string.IsNullOrWhiteSpace(cells[1])) continue;
-                word = new Word { Text = cells[1], Phonetic = NormalizePhonetic(cells[2]), PartOfSpeech = cells[3], Meaning = cells[4], Example = cells.Length > 5 ? cells[5] : "" };
+                word = new Word { Text = cells[1], Phonetic = NormalizePhonetic(cells[2]), PartOfSpeech = cells[3], Meaning = cells[4],
+                    Example = cells.Length > 5 ? cells[5] : "", ExampleMeaning = cells.Length > 6 ? cells[6] : "" };
             }
             else
             {
                 var match = WordAndPhonetic().Match(cells[1]);
                 var text = match.Success ? match.Groups["word"].Value.Trim() : cells[1];
                 if (string.IsNullOrWhiteSpace(text)) continue;
-                word = new Word { Text = text, Phonetic = match.Success ? NormalizePhonetic(match.Groups["phonetic"].Value) : "", PartOfSpeech = cells[2], Meaning = cells[3], Example = cells[4] };
+                word = new Word { Text = text, Phonetic = match.Success ? NormalizePhonetic(match.Groups["phonetic"].Value) : "", PartOfSpeech = cells[2], Meaning = cells[3],
+                    Example = cells[4], ExampleMeaning = cells.Length > 5 ? cells[5] : "" };
             }
             word.Day = currentDay ?? (wordsPerDay > 0 ? count / wordsPerDay + 1 : 1);
             plan.Words.Add(word);
@@ -183,7 +198,7 @@ public static partial class PlanFormat
             {
                 var text = S(w, "word");
                 if (text.Length == 0) continue;
-                plan.Words.Add(new Word { Day = number, Text = text, Phonetic = NormalizePhonetic(S(w, "phonetic")), PartOfSpeech = S(w, "partOfSpeech"), Meaning = S(w, "meaning"), Example = S(w, "example") });
+                plan.Words.Add(new Word { Day = number, Text = text, Phonetic = NormalizePhonetic(S(w, "phonetic")), PartOfSpeech = S(w, "partOfSpeech"), Meaning = S(w, "meaning"), Example = S(w, "example"), ExampleMeaning = S(w, "exampleMeaning") });
             }
         }
         plan.Words = plan.Words.OrderBy(w => w.Day).ToList();
@@ -207,9 +222,9 @@ public static partial class PlanFormat
         {
             var title = plan.DayTitle(day.Key);
             sb.AppendLine().AppendLine($"## Ngày {day.Key}{(title.Length > 0 ? " — " + title : "")}").AppendLine();
-            sb.AppendLine("| STT | Từ | Phiên âm | Loại | Nghĩa | Ví dụ |").AppendLine("|---|---|---|---|---|---|");
+            sb.AppendLine(TableHeader).AppendLine(TableSeparator);
             foreach (var w in day)
-                sb.AppendLine($"| {++number} | {Cell(w.Text)} | {Cell(w.Phonetic)} | {Cell(w.PartOfSpeech)} | {Cell(w.Meaning)} | {Cell(w.Example)} |");
+                sb.AppendLine($"| {++number} | {Cell(w.Text)} | {Cell(w.Phonetic)} | {Cell(w.PartOfSpeech)} | {Cell(w.Meaning)} | {Cell(w.Example)} | {Cell(w.ExampleMeaning)} |");
         }
         return sb.ToString();
 
@@ -229,7 +244,7 @@ public static partial class PlanFormat
         var sb = new StringBuilder(scope).AppendLine();
         if (r.Extra.Length > 0) sb.AppendLine($"Yêu cầu thêm: {r.Extra}");
         if (avoid is { Count: > 0 }) sb.AppendLine($"Không dùng lại các từ đã có: {string.Join(", ", avoid)}.");
-        sb.AppendLine("""
+        sb.AppendLine($"""
 
             Quy tắc cho mỗi từ:
             - Từ: từ hoặc cụm từ tiếng Anh, viết thường (trừ danh từ riêng).
@@ -237,6 +252,7 @@ public static partial class PlanFormat
             - Loại: n, v, adj, adv, phr v, phr, prep, conj
             - Nghĩa: nghĩa tiếng Việt ngắn gọn, đúng nghĩa trong chủ đề.
             - Ví dụ: một câu tiếng Anh tự nhiên có dùng từ đó.
+            {ExampleMeaningRule}
             - Không trùng từ trong toàn bộ lộ trình. Không dùng ký tự | bên trong ô. Ưu tiên từ thông dụng, hữu ích cho giao tiếp và IELTS.
             """);
         sb.AppendLine($"Chỉ trả lời bằng MỘT khối code markdown theo đúng form sau, không giải thích gì thêm. STT đánh liên tục{(onlyDay is null ? " qua các ngày" : "")}:");
@@ -244,8 +260,7 @@ public static partial class PlanFormat
         if (onlyDay is null)
             sb.AppendLine($"# Tên bộ từ: {r.Name}").AppendLine($"Cấp độ: {r.Level}").AppendLine("Mô tả: <một câu mô tả ngắn>").AppendLine();
         sb.AppendLine($"## Ngày {onlyDay ?? 1} — <tiêu đề tiếng Việt>").AppendLine();
-        sb.AppendLine("| STT | Từ | Phiên âm | Loại | Nghĩa | Ví dụ |").AppendLine("|---|---|---|---|---|---|");
-        sb.AppendLine("| 1 | <từ> | /<IPA>/ | <loại> | <nghĩa> | <câu ví dụ> |");
+        sb.AppendLine(TableHeader).AppendLine(TableSeparator).AppendLine(TableRowTemplate);
         if (onlyDay is null) sb.AppendLine().AppendLine("## Ngày 2 — <tiêu đề tiếng Việt>").AppendLine("...");
         sb.AppendLine("```");
         if (onlyDay is null)

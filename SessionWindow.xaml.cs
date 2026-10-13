@@ -131,7 +131,9 @@ public partial class SessionWindow : Window
         CardPos.Text = word.PartOfSpeech;
         CardMeaning.Text = _flipped ? word.Meaning : "";
         CardExample.Text = _flipped && word.Example.Length > 0 ? $"“{word.Example}”" : "";
+        CardExampleMeaning.Text = _flipped && word.Example.Length > 0 ? word.ExampleMeaning : "";
         CardMeaning.Visibility = CardExample.Visibility = _flipped ? Visibility.Visible : Visibility.Collapsed;
+        CardExampleMeaning.Visibility = CardExampleMeaning.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         CardHint.Visibility = _flipped ? Visibility.Collapsed : Visibility.Visible;
         BackButton.Visibility = Visibility.Visible;
         BackButton.IsEnabled = _index > 0;

@@ -31,7 +31,7 @@ public partial class QuickAddWindow : Window
     public void Load(string? word, string? note)
     {
         WordBox.Text = word ?? "";
-        PhoneticBox.Text = MeaningBox.Text = ExampleBox.Text = PosBox.Text = "";
+        PhoneticBox.Text = MeaningBox.Text = ExampleBox.Text = ExampleMeaningBox.Text = PosBox.Text = "";
         NoteText.Text = note ?? "";
         NoteText.Visibility = string.IsNullOrEmpty(note) ? Visibility.Collapsed : Visibility.Visible;
         ErrorText.Visibility = Visibility.Collapsed;
@@ -94,7 +94,7 @@ public partial class QuickAddWindow : Window
         }
         Word? saved = null;
         _store.Update(d => saved = QuickAdd.SaveWord(d, clean, PhoneticBox.Text, PosBox.Text, MeaningBox.Text,
-            Regex.Replace(ExampleBox.Text, @"\s+", " "), DateTime.Now));
+            Regex.Replace(ExampleBox.Text, @"\s+", " "), DateTime.Now, Regex.Replace(ExampleMeaningBox.Text, @"\s+", " ")));
         if (saved is null) { UpdateState(); return; }
         _saved($"Đã lưu “{saved.Text}” — {saved.Meaning}. Từ này sẽ hiện để ôn ngay hôm nay.");
         Close();
