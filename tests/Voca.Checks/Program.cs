@@ -670,6 +670,16 @@ Check(!marks.ContainsKey(learnedAlready.Text.ToLowerInvariant()) && !marks.Conta
 Check(marks["honestly"] == WordMark.New && marks["postponed"] == WordMark.New && marks["committee"] == WordMark.Waiting,
     "player: the video's new words are marked (any form); words saved to “Từ của tôi” show as waiting");
 SubtitleLine Cue(double from, double to, string text) => new(TimeSpan.FromSeconds(from), TimeSpan.FromSeconds(to), text);
+var looped = new List<SubtitleLine> { Cue(0, 1, "Where are you?"), Cue(1, 2, "Where are you?"), Cue(2, 3, "Sasuke!") };
+looped.AddRange(Enumerable.Range(0, 6).Select(i => Cue(3 + i, 4 + i, i % 2 == 0 ? "I'm going to kill you." : "i'm going to KILL you")));
+looped.Add(Cue(10, 11, "Naruto."));
+var unlooped = Subtitles.Clean(looped);
+Check(unlooped.Select(l => l.Text).SequenceEqual(["Where are you?", "Where are you?", "Sasuke!", "Naruto."])
+      && Subtitles.DropRepeats(looped.Take(6).ToList()).Count == 6,
+    "subtitles: a line repeated 4+ times in a row (Whisper looping over music) is dropped; a short repeat stays");
+Check(Subtitles.Clean([Cue(0, 1, "- Give us a hint."), Cue(1, 2, "♪"), Cue(2, 3, "– No hint?"), Cue(3, 4, "Well - maybe.")]).Select(l => l.Text)
+          .SequenceEqual(["Give us a hint.", "No hint?", "Well - maybe."]),
+    "subtitles: the dash before a new speaker and music notes are removed, a dash inside a line stays");
 var talk = new List<SubtitleLine> { Cue(0, 2, "So we went"), Cue(2.2, 4, "to the market."), Cue(7, 9, "It was closed!"), Cue(9.1, 10, "Again.") };
 var paragraphs = Subtitles.Paragraphs(talk);
 Check(paragraphs.Count == 2 && paragraphs[0].SequenceEqual(talk.Take(2)) && paragraphs[1].SequenceEqual(talk.Skip(2)),

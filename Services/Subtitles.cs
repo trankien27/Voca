@@ -114,12 +114,33 @@ public static partial class Subtitles
 
     /// <summary>
     /// Tidies recognised lines: trims, drops empty ones and Whisper's sound tags ("[Music]", "(laughs)",
-    /// "[BLANK_AUDIO]") so only speech is left.
+    /// "[BLANK_AUDIO]") and the dash marking a new speaker ("- Give us a hint.") so only speech is left, and
+    /// drops the runs of one line repeated over music or noise (<see cref="DropRepeats"/>).
     /// </summary>
     public static List<SubtitleLine> Clean(IEnumerable<SubtitleLine> lines) =>
-        lines.Select(l => l with { Text = Whitespace().Replace(SoundTag().Replace(l.Text, " "), " ").Trim() })
+        DropRepeats(lines.Select(l => l with { Text = Whitespace().Replace(SoundTag().Replace(l.Text, " "), " ").Trim().TrimStart('-', '–', '—', ' ') })
              .Where(l => l.Text.Any(char.IsLetter))
-             .ToList();
+             .ToList());
+
+    /// <summary>
+    /// Whisper sometimes "hears" one sentence again and again over music or noise, for minutes. A run of
+    /// <paramref name="minRun"/> or more consecutive lines with the same words (ignoring case and punctuation)
+    /// is such a loop and is removed entirely; shorter repeats ("Where are you? Where are you?") stay.
+    /// </summary>
+    public static List<SubtitleLine> DropRepeats(IReadOnlyList<SubtitleLine> lines, int minRun = 4)
+    {
+        static string Words(string text) => string.Join(' ', Token().Matches(text).Select(m => m.Value.ToLowerInvariant()));
+        var kept = new List<SubtitleLine>();
+        for (var i = 0; i < lines.Count;)
+        {
+            var words = Words(lines[i].Text);
+            var end = i + 1;
+            while (end < lines.Count && Words(lines[end].Text) == words) end++;
+            if (end - i < minRun) kept.AddRange(lines.Skip(i).Take(end - i));
+            i = end;
+        }
+        return kept;
+    }
 
     // ---------- playing ----------
 

@@ -80,18 +80,33 @@ public static class Transcriber
             return await Task.Run(async () =>
             {
                 using var factory = WhisperFactory.FromPath(ModelPath(dataFolder, model));
-                await using var processor = factory.CreateBuilder()
-                    .WithLanguage("en")
-                    .WithThreads(Math.Max(1, Environment.ProcessorCount - 1))
-                    .WithProgressHandler(p => percent.Report(p))
-                    .Build();
-                await using var audio = File.OpenRead(wav);
+                var length = AudioLength(wav);
                 var lines = new List<SubtitleLine>();
-                await foreach (var segment in processor.ProcessAsync(audio, cancel))
+                // Whisper normally prompts each 30-second window with the text just recognised. After music it
+                // can "hear" a made-up sentence and then repeat it for minutes, over real dialogue too. So no
+                // text is carried from one window to the next (MaxLastTextTokens 0, NoContext), and the audio is
+                // recognised in chunks that each start fresh, keeping any other failure to one chunk;
+                // timestamps stay those of the whole file.
+                for (var start = TimeSpan.Zero; start < length; start += Chunk)
                 {
-                    var found = new SubtitleLine(segment.Start, segment.End, segment.Text.Trim());
-                    lines.Add(found);
-                    line.Report(found);
+                    var from = start;
+                    await using var processor = factory.CreateBuilder()
+                        .WithLanguage("en")
+                        .WithNoContext()
+                        .WithMaxLastTextTokens(0)
+                        .WithOffset(from)
+                        .WithDuration(Chunk)
+                        .WithThreads(Math.Max(1, Environment.ProcessorCount - 1))
+                        .WithProgressHandler(p => percent.Report((int)Math.Min(100,
+                            (from.TotalSeconds + Chunk.TotalSeconds * p / 100.0) * 100 / length.TotalSeconds)))
+                        .Build();
+                    await using var audio = File.OpenRead(wav);
+                    await foreach (var segment in processor.ProcessAsync(audio, cancel))
+                    {
+                        var found = new SubtitleLine(segment.Start, segment.End, segment.Text.Trim());
+                        lines.Add(found);
+                        line.Report(found);
+                    }
                 }
                 return Subtitles.Clean(lines);
             }, cancel);
@@ -100,6 +115,15 @@ public static class Transcriber
         {
             try { File.Delete(wav); } catch (IOException) { }
         }
+    }
+
+    /// <summary>Length of the audio recognised in one go (see <see cref="TranscribeAsync"/>).</summary>
+    private static readonly TimeSpan Chunk = TimeSpan.FromMinutes(5);
+
+    private static TimeSpan AudioLength(string wavPath)
+    {
+        using var reader = new WaveFileReader(wavPath);
+        return reader.TotalTime;
     }
 
     /// <summary>Writes the audio track as the 16 kHz mono 16-bit WAV Whisper needs.</summary>
