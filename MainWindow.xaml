@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Voca"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="Voca" Height="48" SizeToContent="Width" MinWidth="120" MaxWidth="340"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ResizeMode="NoResize" ShowInTaskbar="False" ShowActivated="False" Topmost="True">
@@ -44,7 +45,18 @@
                         <TextBlock x:Name="PhoneticText" FontSize="14" Foreground="{StaticResource Accent}" />
                         <TextBlock x:Name="PartOfSpeechText" FontSize="13" FontStyle="Italic" Foreground="{StaticResource Muted}" Margin="8,0,0,0" />
                     </StackPanel>
-                    <TextBlock x:Name="MeaningText" FontSize="15" Foreground="{StaticResource Ink}" TextWrapping="Wrap" Margin="0,0,0,13"/>
+                    <!-- Flash card: the meaning stays face down until the card is clicked, so the word is recalled first. -->
+                    <Border x:Name="MeaningCard" CornerRadius="10" Margin="0,0,0,12" RenderTransformOrigin="0.5,0.5"
+                            BorderBrush="{StaticResource Line}" MouseLeftButtonUp="MeaningCard_Click">
+                        <Border.RenderTransform><ScaleTransform x:Name="MeaningFlip"/></Border.RenderTransform>
+                        <Grid>
+                            <TextBlock x:Name="MeaningText" FontSize="15" Foreground="{StaticResource Ink}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                            <StackPanel x:Name="MeaningCover" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <ui:SymbolIcon Symbol="ArrowSync20" FontSize="16" Foreground="{StaticResource Accent}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Nghĩa là gì? Bấm để lật" FontSize="13" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
                     <Border x:Name="ExamplePanel" Background="{StaticResource Wash}" CornerRadius="8" Padding="10,7" Margin="0,0,0,10">
                         <TextBlock x:Name="ExampleText" FontSize="13" FontStyle="Italic" Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
                     </Border>

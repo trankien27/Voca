@@ -27,6 +27,8 @@ public partial class MainWindow : Window
     private int _index;
     private DateTime _loadedDate = DateTime.MinValue;
     private bool _revealed;
+    /// <summary>The word whose meaning card is turned over in the popup; every other word shows its card face down.</summary>
+    private Guid? _meaningShown;
     private bool _reloading;
     private bool _summaryOpen;
     private LibraryWindow? _libraryWindow;
@@ -299,6 +301,7 @@ public partial class MainWindow : Window
             PhoneticText.Text = "";
             PartOfSpeechText.Text = "";
             MeaningText.Text = empty.Detail;
+            SetMeaningCard(card: false, shown: true);
             ExamplePanel.Visibility = Visibility.Collapsed;
             ReviewInfoText.Text = "";
             ProgressText.Text = StreakText();
@@ -321,6 +324,7 @@ public partial class MainWindow : Window
         PhoneticText.Text = item.Phonetic;
         PartOfSpeechText.Text = item.PartOfSpeech;
         MeaningText.Text = item.Meaning;
+        SetMeaningCard(card: true, shown: _meaningShown == item.Id);
         ExampleText.Text = item.Example;
         ExamplePanel.Visibility = string.IsNullOrWhiteSpace(item.Example) ? Visibility.Collapsed : Visibility.Visible;
         RenderReviewInfo(item);
@@ -745,7 +749,45 @@ public partial class MainWindow : Window
             // If every word is known today, the loop ends where it started and simply keeps rotating.
         }
         _index = next;
+        _meaningShown = null; // a new word starts face down
         Render();
+    }
+
+    /// <summary>
+    /// The meaning as a flash card: face down shows "Bấm để lật", face up the meaning. The meaning keeps its
+    /// space while hidden, so turning the card does not resize the popup. Without a word (empty states) it is
+    /// plain text.
+    /// </summary>
+    private void SetMeaningCard(bool card, bool shown)
+    {
+        MeaningCard.Background = !card ? System.Windows.Media.Brushes.Transparent
+            : shown ? System.Windows.Media.Brushes.White : (System.Windows.Media.Brush)FindResource("Wash");
+        MeaningCard.BorderThickness = new Thickness(card ? 1 : 0);
+        MeaningCard.Padding = card ? new Thickness(12, 10, 12, 10) : new Thickness(0);
+        MeaningCard.MinHeight = card ? 46 : 0;
+        MeaningCard.Cursor = card ? System.Windows.Input.Cursors.Hand : null;
+        MeaningCard.ToolTip = !card ? null : shown ? "Bấm để úp thẻ lại" : "Nhớ nghĩa trước, rồi bấm để lật thẻ";
+        MeaningText.Visibility = shown ? Visibility.Visible : Visibility.Hidden;
+        MeaningCover.Visibility = card && !shown ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>Turns the meaning card over: it narrows to a line, changes face, and opens again.</summary>
+    private void MeaningCard_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (_today.Count == 0) return;
+        var id = _today[_index].Id;
+        var show = _meaningShown != id;
+        var half = new Duration(TimeSpan.FromMilliseconds(110));
+        var close = new System.Windows.Media.Animation.DoubleAnimation(1, 0, half)
+            { EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn } };
+        close.Completed += (_, _) =>
+        {
+            _meaningShown = show ? id : null;
+            SetMeaningCard(card: true, shown: show);
+            MeaningFlip.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, half)
+                { EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut } });
+        };
+        MeaningFlip.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, close);
     }
 
     private void WordPill_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -791,6 +833,7 @@ public partial class MainWindow : Window
 
         if (!_dragging)
         {
+            _meaningShown = null; // each time the popup opens, the card starts face down
             Render();
             // Center the 310px popup above the pill, whose width follows the text.
             DetailPopup.HorizontalOffset = (WordPill.ActualWidth - 310) / 2;
