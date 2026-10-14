@@ -395,6 +395,9 @@
             <!-- ================= My words (Ctrl+Alt+V) ================= -->
             <TabItem Header="Từ của tôi" local:UiIcon.Symbol="Bookmark24" x:Name="MyWordsTab"/>
 
+            <!-- ================= Films to watch ================= -->
+            <TabItem Header="Xem phim" local:UiIcon.Symbol="MoviesAndTv24" x:Name="FilmsTab"/>
+
             <!-- ================= Subtitles from a video ================= -->
             <TabItem Header="Phụ đề video" local:UiIcon.Symbol="ClosedCaption24" x:Name="VideoTab"/>
 
@@ -443,7 +446,7 @@
                             <StackPanel>
                                 <TextBlock Style="{StaticResource H}" Text="Phim"/>
                                 <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,6"
-                                           Text="Thư mục phim: mỗi thư mục con là một phim, tên thư mục là tên phim; bên trong là các tập (video kèm file .srt cùng tên thì có phụ đề). Phim hiện ở tab Phụ đề video (có nút tạo phụ đề cho mọi tập còn thiếu) và tab Video trên điện thoại. Điện thoại phát tốt nhất là mp4 (H.264); mkv, avi có thể không phát được."/>
+                                           Text="Thư mục phim: mỗi thư mục con là một phim, tên thư mục là tên phim; bên trong là các tập (video kèm file .srt cùng tên thì có phụ đề). Phim hiện ở tab Xem phim, tab Phụ đề video (có nút tạo phụ đề cho mọi tập còn thiếu) và tab Video trên điện thoại. Điện thoại phát tốt nhất là mp4 (H.264); mkv, avi có thể không phát được."/>
                                 <DockPanel Margin="0,0,0,10">
                                     <Button DockPanel.Dock="Right" Content="Chọn thư mục phim…" local:UiIcon.Symbol="FolderOpen24" Click="PickFilmFolder_Click" Margin="6,0,0,0"/>
                                     <TextBox x:Name="FilmFolderBox" IsReadOnly="True" VerticalAlignment="Center"/>

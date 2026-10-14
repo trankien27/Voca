@@ -1,0 +1,84 @@
+<UserControl x:Class="Voca.FilmsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Voca"
+             Loaded="View_Loaded">
+    <UserControl.Resources>
+        <Style x:Key="Panel" TargetType="Border">
+            <Setter Property="Background" Value="White"/><Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="BorderBrush" Value="#E6E3F5"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Padding" Value="12"/>
+        </Style>
+    </UserControl.Resources>
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+            <TextBlock Text="Xem phim" FontSize="19" FontWeight="Bold" Foreground="{StaticResource Ink}"/>
+            <TextBlock Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0"
+                       Text="Các phim trong thư mục phim (mỗi thư mục con là một phim). Chọn phim rồi chọn tập để xem kèm phụ đề: từ mới tô vàng (bấm để lưu), từ đang học tô tím. Voca nhớ từng tập đã xem tới đâu. Tạo phụ đề cho các tập ở tab Phụ đề video."/>
+        </StackPanel>
+        <TextBlock DockPanel.Dock="Bottom" x:Name="StatusText" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="4,10,0,0"/>
+        <DockPanel DockPanel.Dock="Top" Margin="-3,0,-3,10">
+            <Button DockPanel.Dock="Right" Content="Thư mục phim…" local:UiIcon.Symbol="FolderOpen24" Click="FilmFolder_Click"
+                    ToolTip="Chọn thư mục chứa các phim: mỗi thư mục con là một phim, tên thư mục là tên phim"/>
+            <Button x:Name="ContinueButton" Click="Continue_Click" Visibility="Collapsed" local:UiIcon.Symbol="Play24"
+                    HorizontalContentAlignment="Left" Padding="12,8" Background="{StaticResource Accent}" Foreground="White">
+                <TextBlock x:Name="ContinueText" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+            </Button>
+        </DockPanel>
+        <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="300"/><ColumnDefinition Width="14"/><ColumnDefinition/></Grid.ColumnDefinitions>
+
+            <!-- the films -->
+            <Border Style="{StaticResource Panel}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Phim" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource Ink}" Margin="0,0,0,6"/>
+                    <TextBlock DockPanel.Dock="Top" x:Name="EmptyText" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Visibility="Collapsed"/>
+                    <ListBox x:Name="FilmsList" BorderThickness="0" HorizontalContentAlignment="Stretch"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="FilmsList_SelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="2,4">
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="#172033" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding Status}" Foreground="#667085" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding Summary}" Foreground="#667085" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <!-- the episodes of the film chosen -->
+            <Border Grid.Column="2" Style="{StaticResource Panel}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" x:Name="FilmTitle" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource Ink}" Margin="0,0,0,6"
+                               TextTrimming="CharacterEllipsis"/>
+                    <WrapPanel DockPanel.Dock="Bottom" Margin="-3,8,0,0">
+                        <Button x:Name="PlayButton" Content="Xem tập này" local:UiIcon.Symbol="Play24" Click="Play_Click" IsEnabled="False"
+                                Background="{StaticResource Accent}" Foreground="White" FontWeight="SemiBold"
+                                ToolTip="Phát tập đang chọn kèm phụ đề, từ chỗ đã dừng lần trước (bấm đúp vào tập cũng được)"/>
+                        <Button x:Name="FromStartButton" Content="Xem từ đầu" Click="FromStart_Click" IsEnabled="False"/>
+                        <Button x:Name="ReadButton" Content="Đọc phụ đề" Click="Read_Click" IsEnabled="False"
+                                ToolTip="Mở phụ đề của tập thành bài đọc để luyện reading"/>
+                        <Button x:Name="OpenFolderButton" Content="Mở thư mục" Click="OpenFolder_Click" IsEnabled="False"/>
+                    </WrapPanel>
+                    <ListBox x:Name="EpisodesList" BorderThickness="0" HorizontalContentAlignment="Stretch"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True"
+                             SelectionChanged="EpisodesList_SelectionChanged" MouseDoubleClick="EpisodesList_DoubleClick" KeyDown="EpisodesList_KeyDown">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <DockPanel Margin="2,3">
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding SubtitleText}" Foreground="{Binding SubtitleInk}" FontSize="11"
+                                               VerticalAlignment="Center" Width="96" TextAlignment="Right"/>
+                                    <ProgressBar DockPanel.Dock="Right" Width="70" Height="4" Maximum="1" Value="{Binding Watched, Mode=OneWay}" Margin="10,0,10,0"
+                                                 VerticalAlignment="Center" Foreground="{StaticResource Accent}" Background="#ECEAF8" BorderThickness="0"/>
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding WatchText}" Foreground="#667085" FontSize="11" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Label}" Foreground="#172033" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                </DockPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</UserControl>

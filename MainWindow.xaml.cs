@@ -106,6 +106,7 @@ public partial class MainWindow : Window
         menu.Items.Add("Tạo bài kiểm tra", null, (_, _) => Dispatcher.Invoke(OpenTest));
         menu.Items.Add("Danh sách từ sai", null, (_, _) => Dispatcher.Invoke(OpenMistakes));
         menu.Items.Add("Từ của tôi (Ctrl+Alt+V)", null, (_, _) => Dispatcher.Invoke(OpenMyWords));
+        menu.Items.Add("Xem phim…", null, (_, _) => Dispatcher.Invoke(OpenFilms));
         menu.Items.Add("Phụ đề từ video…", null, (_, _) => Dispatcher.Invoke(OpenVideo));
         _updatesMenuItem = menu.Items.Add("Cập nhật phiên bản…", null, (_, _) => Dispatcher.Invoke(OpenUpdates));
         menu.Items.Add("Thư viện và cài đặt", null, (_, _) => Dispatcher.Invoke(OpenLibrary));
@@ -1097,6 +1098,12 @@ public partial class MainWindow : Window
     {
         OpenLibrary();
         _libraryWindow?.ShowVideo();
+    }
+
+    private void OpenFilms()
+    {
+        OpenLibrary();
+        _libraryWindow?.ShowFilms();
     }
 
     private void OpenLibrary()

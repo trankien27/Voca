@@ -45,6 +45,7 @@ public partial class LibraryWindow : Wpf.Ui.Controls.FluentWindow
         AllWordsTab.Content = new AllWordsView(store, actions, ShowWordInEditor);
         MistakesTab.Content = new MistakesView(store, actions);
         MyWordsTab.Content = new MyWordsView(store, actions);
+        FilmsTab.Content = new FilmsView(store);
         VideoTab.Content = new VideoView(store);
         // The version list is fetched the first time Settings is opened.
         Tabs.SelectionChanged += (_, e) =>
@@ -73,6 +74,9 @@ public partial class LibraryWindow : Wpf.Ui.Controls.FluentWindow
 
     /// <summary>Brings the "Phụ đề video" tab to the front.</summary>
     public void ShowVideo() => Tabs.SelectedItem = VideoTab;
+
+    /// <summary>Brings the "Xem phim" tab to the front.</summary>
+    public void ShowFilms() => Tabs.SelectedItem = FilmsTab;
 
     /// <summary>Brings Settings → "Cập nhật phiên bản" to the front.</summary>
     public void ShowUpdates()
@@ -783,7 +787,7 @@ public partial class LibraryWindow : Wpf.Ui.Controls.FluentWindow
     {
         if (VideoView.PickFilmFolder(this, _store) is not { } folder) return;
         FilmFolderBox.Text = folder;
-        Status($"Thư mục phim: {folder}. Phim hiện ở tab Phụ đề video và tab Video trên điện thoại.");
+        Status($"Thư mục phim: {folder}. Phim hiện ở tab Xem phim, tab Phụ đề video và tab Video trên điện thoại.");
     }
 
     private void AddPhoneFolder_Click(object sender, RoutedEventArgs e)

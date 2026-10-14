@@ -83,7 +83,7 @@ public partial class VideoView : System.Windows.Controls.UserControl
 
     private void View_Loaded(object sender, RoutedEventArgs e)
     {
-        ShowContinue(); // also lists the films
+        LoadFilms();
         // Loaded fires again on every return to the tab; hook the window once.
         if (_host is not null) return;
         _host = Window.GetWindow(this);
@@ -129,30 +129,21 @@ public partial class VideoView : System.Windows.Controls.UserControl
             : $"{episodes.Count} tập · {subtitled} có phụ đề" + (watched > 0 ? $" · đã xem {watched}" : "");
     }
 
-    /// <summary>An episode's line in the list: "E04 · đang xem 12:30", "E01 · đã xem ✓".</summary>
-    private static string EpisodeText(PhoneVideo episode) =>
-        episode.Label + (episode.Progress is not { } p ? ""
-            : p.Finished ? "  ·  đã xem ✓"
-            : $"  ·  đang xem {VideoPlayerWindow.Clock(TimeSpan.FromSeconds(p.Seconds))}");
-
-    /// <summary>A film chosen: its episodes fill the list (subtitled ones marked); the one to watch next is opened.</summary>
+    /// <summary>A film chosen: its episodes fill the list (subtitled ones marked), the first one still without subtitles opened.</summary>
     private void FilmBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
         ShowFilmHint();
         if (_filmsLoading || _work is not null || FilmBox.SelectedItem is not FilmRow { Episodes.Count: > 0 } film) return;
         _queue.Clear();
-        foreach (var episode in film.Episodes) _queue.Add(new QueueItem(episode.Path, EpisodeText(episode)));
+        foreach (var episode in film.Episodes) _queue.Add(new QueueItem(episode.Path, episode.Label));
         RedoBox.IsChecked = false;
         ShowQueueStates();
         QueuePanel.Visibility = Visibility.Visible;
-        // Where to pick up: the episode left half-watched, else the one after the last watched, else the first.
-        var last = film.Episodes.Where(v => v.Progress is not null).MaxBy(v => v.Progress!.WatchedAt);
-        var at = last is null ? 0 : film.Episodes.IndexOf(last) + (last.Progress!.Finished ? 1 : 0);
-        QueueList.SelectedIndex = Math.Clamp(at, 0, _queue.Count - 1);
-        QueueList.ScrollIntoView(QueueList.SelectedItem);
         var missing = _queue.Count(i => !i.HasSubtitles);
+        QueueList.SelectedIndex = Math.Max(0, _queue.ToList().FindIndex(i => !i.HasSubtitles));
+        QueueList.ScrollIntoView(QueueList.SelectedItem);
         Status($"{film.Name}: {_queue.Count} tập" + (missing > 0 ? $", {missing} tập chưa có phụ đề — bấm “Tạo phụ đề” để tạo lần lượt" : ", tập nào cũng có phụ đề")
-               + ". Bấm một tập để xem phụ đề, rồi “▶ Xem video có phụ đề”.");
+               + ". Bấm một tập để xem phụ đề của nó.");
         UpdateButtons();
     }
 
@@ -311,7 +302,7 @@ public partial class VideoView : System.Windows.Controls.UserControl
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Status($"Không đọc được thư mục: {ex.Message}"); return; }
         var videos = files.Where(f => WatchProgress.MediaExtensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
-            .OrderBy(Path.GetDirectoryName, WatchProgress.EpisodeOrder).ThenBy(f => f, WatchProgress.EpisodeOrder).ToList();
+            .OrderBy(f => Path.GetDirectoryName(f) ?? "", WatchProgress.EpisodeOrder).ThenBy(f => f, WatchProgress.EpisodeOrder).ToList();
         if (videos.Count == 0) { Status($"{root} không có video hay file âm thanh nào."); return; }
 
         _filmsLoading = true;
@@ -497,43 +488,14 @@ public partial class VideoView : System.Windows.Controls.UserControl
         WatchProgress.MediaExtensions.Select(ext => Path.ChangeExtension(srt, ext)).FirstOrDefault(File.Exists);
 
     /// <summary>
-    /// Plays the video with the subtitles (from where it was left off last time); new words of the video and
-    /// words being learned stand out.
+    /// "▶ Xem thử": plays the video with the subtitles just made or opened (from where it was left off last time), to
+    /// check them; watching films belongs to the "Xem phim" tab.
     /// </summary>
     private void PlayVideo_Click(object sender, RoutedEventArgs e)
     {
         if (_videoPath is null || _lines.Count == 0) return;
-        Play(_videoPath, WatchProgress.ResumeAt(WatchProgress.Load(_store.Folder), _videoPath));
-    }
-
-    private void Play(string video, TimeSpan start)
-    {
-        var player = new VideoPlayerWindow(_store, video, _lines, Subtitles.NewWords(_store.Data, _lines), start);
-        player.Closed += (_, _) => ShowContinue(); // the player saved where it stopped
-        player.Show();
-    }
-
-    /// <summary>"Xem tiếp": the last video at the second it was left off, or the next episode once it was finished.</summary>
-    private void Continue_Click(object sender, RoutedEventArgs e)
-    {
-        if (WatchProgress.Continue(WatchProgress.Load(_store.Folder)) is not { } next) { ShowContinue(); return; }
-        _queue.Clear();
-        QueuePanel.Visibility = Visibility.Collapsed;
-        OpenFile(next.Video);
-        Play(next.Video, next.Start); // plays without subtitles when the video has no .srt yet
-    }
-
-    private void ShowContinue()
-    {
-        if (IsLoaded) LoadFilms();
-        var next = WatchProgress.Continue(WatchProgress.Load(_store.Folder));
-        ContinueButton.Visibility = next is null ? Visibility.Collapsed : Visibility.Visible;
-        if (next is null) return;
-        var name = Path.GetFileNameWithoutExtension(next.Video);
-        ContinueText.Text = next.NextEpisode ? $"Xem tập tiếp: {name}" : $"Xem tiếp: {name} · {VideoPlayerWindow.Clock(next.Start)}";
-        ContinueButton.ToolTip = next.NextEpisode
-            ? $"Tập trước đã xem hết. Mở tập tiếp theo trong thư mục:\n{next.Video}"
-            : $"Mở lại video xem gần nhất, đúng chỗ đã dừng ({VideoPlayerWindow.Clock(next.Start)}):\n{next.Video}";
+        new VideoPlayerWindow(_store, _videoPath, _lines, Subtitles.NewWords(_store.Data, _lines),
+            WatchProgress.ResumeAt(WatchProgress.Load(_store.Folder), _videoPath)).Show();
     }
 
     /// <summary>Opens the subtitles as a text to read; with none open yet, asks for an .srt first (no video needed).</summary>

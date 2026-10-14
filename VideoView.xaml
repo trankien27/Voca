@@ -17,7 +17,7 @@
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
             <TextBlock Text="Phụ đề từ video" FontSize="19" FontWeight="Bold" Foreground="{StaticResource Ink}"/>
             <TextBlock Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0"
-                       Text="Chọn một video (mp4, mkv, mov…) nói tiếng Anh: Voca nhận dạng giọng nói ngay trên máy (không cần mạng, trừ lần đầu tải model) và lưu file phụ đề .srt cạnh video. Sau đó có thể lấy những từ chưa có trong thư viện để tạo bộ từ mới."/>
+                       Text="Chọn một video (mp4, mkv, mov…) nói tiếng Anh: Voca nhận dạng giọng nói ngay trên máy (không cần mạng, trừ lần đầu tải model) và lưu file phụ đề .srt cạnh video. Sau đó có thể lấy những từ chưa có trong thư viện để tạo bộ từ mới. Xem phim ở tab Xem phim."/>
         </StackPanel>
         <TextBlock DockPanel.Dock="Bottom" x:Name="StatusText" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="4,10,0,0"/>
         <Grid>
@@ -32,7 +32,7 @@
                             <TextBlock DockPanel.Dock="Left" Text="Phim" FontWeight="SemiBold" Foreground="{StaticResource Ink}" VerticalAlignment="Center" Margin="3,0,8,0"/>
                             <Grid>
                                 <ComboBox x:Name="FilmBox" DisplayMemberPath="Text" Padding="6,4" SelectionChanged="FilmBox_SelectionChanged"
-                                          ToolTip="Chọn phim để thấy các tập: bấm một tập để xem phụ đề và phát; “Tạo phụ đề” tạo cho các tập chưa có"/>
+                                          ToolTip="Chọn phim để liệt kê các tập: “Tạo phụ đề” tạo cho các tập chưa có; bấm một tập để xem phụ đề của nó"/>
                                 <TextBlock x:Name="FilmHint" Text="Chọn phim…" Foreground="{StaticResource Muted}" IsHitTestVisible="False"
                                            VerticalAlignment="Center" Margin="12,0,0,0"/>
                             </Grid>
@@ -49,11 +49,6 @@
                                     ToolTip="Chọn thư mục chứa các phim: mỗi thư mục con là một phim, tên thư mục là tên phim"/>
                         </WrapPanel>
                         <TextBlock Style="{StaticResource Step}" Text="1 · Chọn video và tạo phụ đề"/>
-                        <Button x:Name="ContinueButton" Click="Continue_Click" Visibility="Collapsed" local:UiIcon.Symbol="Play24"
-                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="-3,0,-3,8" Padding="12,8"
-                                Background="{StaticResource Accent}" Foreground="White">
-                            <TextBlock x:Name="ContinueText" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="480"/>
-                        </Button>
                         <DockPanel Margin="-3,0,0,6">
                             <Button DockPanel.Dock="Left" x:Name="PickButton" Content="Chọn video hoặc .srt…" Click="Pick_Click"
                                     ToolTip="Giữ Ctrl hoặc Shift để chọn nhiều video và tạo phụ đề lần lượt cho cả loạt"/>
@@ -88,8 +83,8 @@
                             <Button x:Name="CancelButton" Content="Hủy" Click="Cancel_Click" Visibility="Collapsed"/>
                             <Button x:Name="SaveButton" Content="Lưu .srt…" Click="Save_Click" IsEnabled="False"/>
                             <Button x:Name="OpenFolderButton" Content="Mở thư mục" Click="OpenFolder_Click" IsEnabled="False"/>
-                            <Button x:Name="PlayVideoButton" Content="▶ Xem video có phụ đề" Click="PlayVideo_Click" IsEnabled="False"
-                                    ToolTip="Phát video kèm phụ đề; từ mới tô vàng (bấm để lưu), từ đang học tô tím (rê chuột xem nghĩa)"/>
+                            <Button x:Name="PlayVideoButton" Content="▶ Xem thử" Click="PlayVideo_Click" IsEnabled="False"
+                                    ToolTip="Phát video với phụ đề vừa tạo để kiểm tra (xem phim thường xuyên ở tab Xem phim)"/>
                             <Button x:Name="ReadButton" Content="Đọc phụ đề" Click="Read_Click"
                                     ToolTip="Mở phụ đề thành bài đọc để luyện reading (không cần video). Chưa mở phụ đề nào thì chọn một file .srt."/>
                         </WrapPanel>
