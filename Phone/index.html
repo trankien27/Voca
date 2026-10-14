@@ -173,13 +173,13 @@ label.lbl { display: block; font-size: 13px; font-weight: 600; color: var(--mute
 @keyframes spin { to { transform: rotate(360deg); } }
 .end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: #000a; text-align: center; padding: 16px; }
 .end .btn { background: #6C5CE7; color: #fff; }
-.sub { min-height: 96px; padding: 12px 16px; font-size: 21px; line-height: 1.45; text-align: center; background: #111; color: #fff; }
+.sub { min-height: 76px; padding: 10px 16px; font-size: calc(17px * var(--sub-scale, 1) * var(--sub-fit, 1)); line-height: 1.4; text-align: center; background: #111; color: #fff; }
 .sub.empty { color: #888; font-size: 15px; display: flex; align-items: center; justify-content: center; }
 .w-new { color: #FFC94D; font-weight: 700; } .w-learning { color: #B9AEFF; font-weight: 700; } .w-waiting { color: #7EE2A8; font-weight: 700; }
 .w-new, .w-learning, .w-waiting { cursor: pointer; border-bottom: 1px dashed currentColor; }
 .legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 8px 16px; font-size: 12px; color: #9A9FB5; }
 #player > .transcript { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0 calc(16px + env(safe-area-inset-bottom)); background: #000; }
-.tline { display: flex; gap: 10px; padding: 8px 16px; font-size: 16px; color: #C9CCD8; }
+.tline { display: flex; gap: 10px; padding: 8px 16px; font-size: 15px; color: #C9CCD8; }
 .tline .at { flex: none; width: 44px; font-size: 12px; color: #777; padding-top: 3px; font-variant-numeric: tabular-nums; }
 .tline.now { background: #1A1C27; color: #fff; }
 .pop { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--card); color: var(--ink); border-radius: 18px 18px 0 0;
@@ -190,7 +190,7 @@ label.lbl { display: block; font-size: 13px; font-weight: 600; color: var(--mute
 .stage.full .screen, .stage.full video { height: 100%; width: 100%; }
 .stage.full video { max-height: none; object-fit: contain; }
 .stage.full .ctl-top { display: flex; }
-.stage.full .sub { position: absolute; left: 6%; right: 6%; bottom: 74px; min-height: 0; background: rgba(0,0,0,.6); border-radius: 10px; padding: 6px 12px; font-size: 22px; pointer-events: auto; transition: bottom .2s; }
+.stage.full .sub { position: absolute; left: 6%; right: 6%; bottom: 74px; min-height: 0; background: rgba(0,0,0,.6); border-radius: 10px; padding: 5px 12px; font-size: calc(17px * var(--sub-scale, 1) * var(--sub-fit, 1)); pointer-events: auto; transition: bottom .2s; }
 .stage.full.hide-ctl .sub { bottom: 16px; }
 .stage.full .sub.empty, .stage.full .sub:empty { display: none; }
 @media (orientation: landscape) and (max-height: 600px) {
@@ -201,10 +201,13 @@ label.lbl { display: block; font-size: 13px; font-weight: 600; color: var(--mute
   .stage .screen, .stage video { height: 100%; width: 100%; }
   .stage video { max-height: none; object-fit: contain; }
   .stage .ctl-top { display: flex; }
-  .stage .sub { position: absolute; left: 8%; right: 8%; bottom: 74px; min-height: 0; background: rgba(0,0,0,.6); border-radius: 10px; padding: 6px 12px; font-size: 20px; transition: bottom .2s; }
+  .stage .sub { position: absolute; left: 8%; right: 8%; bottom: 74px; min-height: 0; background: rgba(0,0,0,.6); border-radius: 10px; padding: 5px 12px; font-size: calc(16px * var(--sub-scale, 1) * var(--sub-fit, 1)); transition: bottom .2s; }
   .stage.hide-ctl .sub { bottom: 14px; }
   .stage .sub.empty, .stage .sub:empty { display: none; }
 }
+/* with the subtitle on the picture (full screen, landscape), messages show at the top so they never cover it */
+.stage .toast { top: calc(12px + env(safe-area-inset-top)); bottom: auto; }
+@media (orientation: landscape) and (max-height: 600px) { body.playing .toast { top: calc(12px + env(safe-area-inset-top)); bottom: auto; } }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -735,6 +738,7 @@ async function openPlayer(id, push = true) {
   const speed = h("select", { "aria-label": "Tốc độ", onchange: () => { video.playbackRate = Number(speed.value); poke(); } },
     [0.5, 0.75, 1, 1.25, 1.5].map(s => h("option", { value: s, selected: s === 1 }, s + "×")));
   const fullButton = h("button", { "aria-label": "Toàn màn hình", onclick: () => toggleFull() }, "⛶");
+  const sizeButton = h("button", { "aria-label": "Cỡ chữ phụ đề", onclick: () => { setSubSize((subSize + 1) % SubSizes.length, true); poke(); } }, "Aa");
   const flashLeft = h("div", { class: "flash left" }), flashRight = h("div", { class: "flash right" });
   const endBox = h("div", { class: "end", hidden: true });
   const ctl = h("div", { class: "ctl" },
@@ -748,13 +752,14 @@ async function openPlayer(id, push = true) {
     h("div", { class: "ctl-bot" }, seek,
       h("div", { class: "ctl-row" },
         h("button", { "aria-label": "Nghe lại câu", onclick: () => { replayLine(); poke(); } }, "⏮ Câu"),
-        time, speed, ccButton, fullButton)));
+        time, speed, sizeButton, ccButton, fullButton)));
   const tapLayer = h("div", { class: "tap" });
   const screenBox = h("div", { class: "screen" }, video, tapLayer, h("div", { class: "spin" }), flashLeft, flashRight, ctl, endBox);
   const stage = h("div", { class: "stage loading" }, screenBox, sub);
   const transcript = h("div", { class: "transcript" });
   player = { id, data, video, sub, stage, transcript, seek, time, playButton, endBox, flashLeft, flashRight,
     line: -2, showSubs: true, ended: false, timer: 0, hideTimer: 0, popResume: false, seeking: false, full: false };
+  setSubSize(subSize, false);
 
   const top = h("div", { class: "top" },
     h("button", { "aria-label": "Đóng", onclick: () => closePlayer() }, "‹"),
@@ -771,6 +776,7 @@ async function openPlayer(id, push = true) {
   root.hidden = false;
   root.scrollTop = 0;
   document.body.style.overflow = "hidden";
+  document.body.classList.add("playing");
   if (push) history.pushState({ player: id }, "");
 
   // ---- taps on the picture: one shows / hides the controls, two on a side skip 10 seconds ----
@@ -829,6 +835,23 @@ async function openPlayer(id, push = true) {
   renderLine(true);
   showControls();
   video.play().catch(() => { stage.classList.remove("loading"); /* needs a tap on ▶ first */ });
+}
+
+/** Subtitle sizes for the "Aa" button; the phone remembers the one chosen. */
+const SubSizes = [["nhỏ", 0.85], ["vừa", 1], ["lớn", 1.2]];
+let subSize = (() => {
+  try {
+    const saved = localStorage.getItem("voca.subSize");
+    const n = saved === null ? NaN : Number(saved);
+    return n >= 0 && n < SubSizes.length ? n : 1;
+  } catch { return 1; }
+})();
+
+function setSubSize(index, say) {
+  subSize = index;
+  try { localStorage.setItem("voca.subSize", String(index)); } catch { }
+  if (player) player.stage.style.setProperty("--sub-scale", SubSizes[index][1]);
+  if (say) toast("Cỡ phụ đề: " + SubSizes[index][0]);
 }
 
 function togglePlay() {
@@ -947,6 +970,8 @@ function renderLine(force) {
   player.line = i;
   sub.className = "sub";
   sub.replaceChildren(...(player.showSubs && i >= 0 ? renderParts(data.lines[i].parts) : []));
+  // A very long line (speech recognition sometimes joins several sentences) is set a little smaller.
+  sub.style.setProperty("--sub-fit", i >= 0 && data.lines[i].parts.reduce((n, p) => n + p.t.length, 0) > 110 ? 0.85 : 1);
   transcript.querySelector(".tline.now")?.classList.remove("now");
   const row = i >= 0 ? transcript.children[i] : null;
   if (row) {
@@ -995,6 +1020,7 @@ function closePlayer({ back = true, reload = true } = {}) {
   $("#player").hidden = true;
   $("#player").replaceChildren();
   document.body.style.overflow = "";
+  document.body.classList.remove("playing");
   if (back && history.state && history.state.player) history.back();
   if (reload && current === "video") loadVideos();
 }
