@@ -139,7 +139,8 @@ label.lbl { display: block; font-size: 13px; font-weight: 600; color: var(--mute
 #player .top .name { flex: 1; min-width: 0; font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #player .top button { width: 40px; height: 40px; border-radius: 50%; background: #222; color: #fff; font-size: 18px; flex: none; }
 /* the player: the video, its controls and (full screen / landscape) the subtitle, all inside .stage */
-.stage { position: relative; background: #000; user-select: none; -webkit-user-select: none; }
+.stage { position: relative; background: #000; user-select: none; -webkit-user-select: none;
+  --sub-outline: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 4px #000, 0 2px 6px rgba(0,0,0,.8); }
 .screen { position: relative; background: #000; }
 .screen video { display: block; width: 100%; max-height: 56vh; background: #000; }
 .tap { position: absolute; inset: 0; }
@@ -173,7 +174,7 @@ label.lbl { display: block; font-size: 13px; font-weight: 600; color: var(--mute
 @keyframes spin { to { transform: rotate(360deg); } }
 .end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: #000a; text-align: center; padding: 16px; }
 .end .btn { background: #6C5CE7; color: #fff; }
-.sub { min-height: 76px; padding: 10px 16px; font-size: calc(17px * var(--sub-scale, 1) * var(--sub-fit, 1)); line-height: 1.4; text-align: center; background: #111; color: #fff; }
+.sub { min-height: 76px; padding: 10px 16px; font-size: calc(17px * var(--sub-scale, 1) * var(--sub-fit, 1)); line-height: 1.4; text-align: center; color: #fff; }
 .sub.empty { color: #888; font-size: 15px; display: flex; align-items: center; justify-content: center; }
 .w-new { color: #FFC94D; font-weight: 700; } .w-learning { color: #B9AEFF; font-weight: 700; } .w-waiting { color: #7EE2A8; font-weight: 700; }
 .w-new, .w-learning, .w-waiting { cursor: pointer; border-bottom: 1px dashed currentColor; }
@@ -190,7 +191,7 @@ label.lbl { display: block; font-size: 13px; font-weight: 600; color: var(--mute
 .stage.full .screen, .stage.full video { height: 100%; width: 100%; }
 .stage.full video { max-height: none; object-fit: contain; }
 .stage.full .ctl-top { display: flex; }
-.stage.full .sub { position: absolute; left: 6%; right: 6%; bottom: 74px; min-height: 0; background: rgba(0,0,0,.6); border-radius: 10px; padding: 5px 12px; font-size: calc(17px * var(--sub-scale, 1) * var(--sub-fit, 1)); pointer-events: auto; transition: bottom .2s; }
+.stage.full .sub { position: absolute; left: 6%; right: 6%; bottom: 74px; min-height: 0; padding: 5px 12px; text-shadow: var(--sub-outline); font-size: calc(17px * var(--sub-scale, 1) * var(--sub-fit, 1)); pointer-events: auto; transition: bottom .2s; }
 .stage.full.hide-ctl .sub { bottom: 16px; }
 .stage.full .sub.empty, .stage.full .sub:empty { display: none; }
 @media (orientation: landscape) and (max-height: 600px) {
@@ -201,7 +202,7 @@ label.lbl { display: block; font-size: 13px; font-weight: 600; color: var(--mute
   .stage .screen, .stage video { height: 100%; width: 100%; }
   .stage video { max-height: none; object-fit: contain; }
   .stage .ctl-top { display: flex; }
-  .stage .sub { position: absolute; left: 8%; right: 8%; bottom: 74px; min-height: 0; background: rgba(0,0,0,.6); border-radius: 10px; padding: 5px 12px; font-size: calc(16px * var(--sub-scale, 1) * var(--sub-fit, 1)); transition: bottom .2s; }
+  .stage .sub { position: absolute; left: 8%; right: 8%; bottom: 74px; min-height: 0; padding: 5px 12px; text-shadow: var(--sub-outline); font-size: calc(16px * var(--sub-scale, 1) * var(--sub-fit, 1)); transition: bottom .2s; }
   .stage.hide-ctl .sub { bottom: 14px; }
   .stage .sub.empty, .stage .sub:empty { display: none; }
 }
