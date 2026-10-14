@@ -46,7 +46,9 @@ public sealed class PhoneApi(Store store, Func<DateTime>? clock = null)
                     { ["Set-Cookie"] = $"{CookieName}={Uri.EscapeDataString(key)}; Max-Age=31536000; Path=/; HttpOnly; SameSite=Lax" })
                 : Locked();
         if (!IsKey(request.Cookie(CookieName), key))
-            return request.Path.StartsWith("/api/") ? Error(401, "Điện thoại chưa được kết nối. Quét lại mã QR trong Voca trên máy tính.") : Locked();
+            return request.Path.StartsWith("/api/")
+                ? Error(401, "Điện thoại chưa được kết nối ở địa chỉ này. Quét mã QR của đúng địa chỉ này trong Voca trên máy tính.")
+                : Locked();
         // Another site cannot add this header without the browser asking first, so it cannot make changes for you.
         if (request.Method == "POST" && request.Header("x-voca") != "1") return Error(403, "Yêu cầu không hợp lệ.");
 
@@ -101,8 +103,9 @@ public sealed class PhoneApi(Store store, Func<DateTime>? clock = null)
         <title>Voca</title>
         <body style="font-family:system-ui,sans-serif;max-width:420px;margin:15vh auto;padding:0 20px;color:#172033;line-height:1.5">
         <h2 style="color:#6C5CE7">Voca</h2>
-        <p>Điện thoại này chưa được kết nối.</p>
+        <p>Điện thoại này chưa được kết nối ở địa chỉ này.</p>
         <p>Trên máy tính, mở <b>Voca → Thư viện → Cài đặt → Học trên điện thoại</b> rồi quét mã QR bằng camera điện thoại.</p>
+        <p>Mỗi địa chỉ (Wi-Fi, Tailscale) cần quét mã QR riêng một lần: muốn dùng địa chỉ Tailscale <b>100.x.x.x</b> thì chọn nó ở ô <b>Địa chỉ</b> rồi quét mã QR của nó.</p>
         </body></html>
         """);
 

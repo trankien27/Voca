@@ -724,7 +724,8 @@ public partial class LibraryWindow : Wpf.Ui.Controls.FluentWindow
         else
         {
             PhoneStatusText.Text = $"Đang mở ở cổng {phone.Port}. Lần đầu Windows có thể hỏi về tường lửa: chọn Cho phép trên mạng riêng (Private). " +
-                                   "Không mở được trên điện thoại thì xem Wi-Fi của máy tính có đang đặt là mạng riêng không.";
+                                   "Không mở được trên điện thoại thì xem Wi-Fi của máy tính có đang đặt là mạng riêng không. " +
+                                   "Mỗi địa chỉ cần quét mã QR của nó một lần: điện thoại đã kết nối qua Wi-Fi vẫn phải quét mã của địa chỉ Tailscale để dùng khi ra ngoài.";
         }
     }
 

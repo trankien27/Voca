@@ -69,7 +69,7 @@ dotnet run --project .\tests\Voca.Checks
 - **Từ vựng**: tìm mọi từ theo từ hoặc nghĩa (gõ không dấu được), lọc theo trạng thái, chạm để xem chi tiết.
 - **Thêm từ**: lưu từ kèm nghĩa vào *Từ của tôi* (vào ôn tập ngay), hoặc **Để AI điền sau**; báo nếu thư viện đã có từ đó.
 
-Điện thoại cần **cùng mạng Wi-Fi/LAN** với máy tính; muốn dùng khi ra ngoài thì cài [Tailscale](https://tailscale.com) trên cả hai máy và chọn địa chỉ Tailscale trong danh sách. Lần đầu bật, Windows có thể hỏi về tường lửa: chọn cho phép trên **mạng riêng** (Private). Link trong mã QR có một mã bí mật — điện thoại không có mã bị từ chối; **Đổi mã kết nối** để ngắt mọi điện thoại đã kết nối. Mặc định dùng cổng 8765 (đổi được). Mở trang xong, *Thêm vào màn hình chính* để lần sau mở như một ứng dụng.
+Điện thoại cần **cùng mạng Wi-Fi/LAN** với máy tính; muốn dùng khi ra ngoài thì cài [Tailscale](https://tailscale.com) trên cả hai máy, chọn địa chỉ Tailscale trong danh sách và quét mã QR của nó — **mỗi địa chỉ cần quét mã QR riêng một lần** (trình duyệt nhớ kết nối theo từng địa chỉ), nên điện thoại đã kết nối qua Wi-Fi vẫn phải quét mã của địa chỉ Tailscale một lần. Lần đầu bật, Windows có thể hỏi về tường lửa: chọn cho phép trên **mạng riêng** (Private). Link trong mã QR có một mã bí mật — điện thoại không có mã bị từ chối; **Đổi mã kết nối** để ngắt mọi điện thoại đã kết nối. Mặc định dùng cổng 8765 (đổi được). Mở trang xong, *Thêm vào màn hình chính* để lần sau mở như một ứng dụng.
 
 ## Chuyển sang máy khác
 
