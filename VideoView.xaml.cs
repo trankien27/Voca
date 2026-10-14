@@ -380,61 +380,21 @@ public partial class VideoView : System.Windows.Controls.UserControl
             }
             catch (IOException ex) { Status($"Không đọc được file: {ex.Message}"); }
         }
-        else if (!isSrt && EmbeddedEnglish(_mediaPath) is { } track)
-        {
-            Status("Đang lấy phụ đề tiếng Anh có sẵn trong video…");
-            _ = TakeEmbeddedAsync(_mediaPath, track);
-        }
         else
         {
-            Status("Bấm “Tạo phụ đề”.");
+            Status("Bấm “Tạo phụ đề” để Whisper nghe tiếng Anh của video và tạo phụ đề."
+                   + (!isSrt && EmbeddedEnglish(_mediaPath) is not null ? " Video này cũng có sẵn phụ đề tiếng Anh bên trong: “Tách phụ đề từ mkv” lấy nó ngay." : ""));
         }
         ShowWordSets(loadPending: true);
         UpdateButtons();
     }
 
-    /// <summary>The English text subtitles stored inside an .mkv, if any — then no speech recognition is needed.</summary>
+    /// <summary>The English text subtitles stored inside an .mkv, if any (for “Tách phụ đề từ mkv”).</summary>
     private static MkvTrack? EmbeddedEnglish(string path) =>
         Matroska.IsMatroska(path) ? Matroska.BestEnglishSubtitles(Matroska.ReadTracks(path)) : null;
 
     private static Task<List<SubtitleLine>> ReadEmbeddedAsync(string path, MkvTrack track, CancellationToken cancel = default) =>
         Task.Run(() => Matroska.ReadSubtitles(path, track.Number, cancel), cancel);
-
-    /// <summary>
-    /// A video opened without an .srt but with English subtitles inside: they are read and saved as its .srt (as
-    /// recognised subtitles would be), so the player, the film list and the phone find them.
-    /// </summary>
-    private async Task TakeEmbeddedAsync(string path, MkvTrack track)
-    {
-        List<SubtitleLine> lines;
-        try { lines = await ReadEmbeddedAsync(path, track); }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
-        {
-            if (_mediaPath == path) Status($"Không đọc được phụ đề có sẵn trong video ({ex.Message}). Bấm “Tạo phụ đề” để nhận dạng giọng nói.");
-            return;
-        }
-        if (_mediaPath != path || _work is not null) return; // another video was opened meanwhile
-        if (lines.Count == 0) { Status("Phụ đề có sẵn trong video không có lời thoại. Bấm “Tạo phụ đề” để nhận dạng giọng nói."); return; }
-        SetLines(lines);
-        var srt = SrtPathFor(path);
-        var saved = TryWriteSrt(srt, lines);
-        Status($"Đã lấy {lines.Count} dòng phụ đề tiếng Anh có sẵn trong video ({track.Label})"
-               + (saved ? $" và lưu thành {Path.GetFileName(srt)}" : " (không lưu được file .srt cạnh video)")
-               + ". Bấm “▶ Xem video có phụ đề” hoặc “Tìm từ mới”.");
-        if (_queue.Count > 0) ShowQueueStates();
-        ShowWordSets(loadPending: true);
-        UpdateButtons();
-    }
-
-    private static bool TryWriteSrt(string path, IEnumerable<SubtitleLine> lines)
-    {
-        try
-        {
-            File.WriteAllText(path, Subtitles.ToSrt(lines), new System.Text.UTF8Encoding(false));
-            return true;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
-    }
 
     /// <summary>
     /// Shows this video's word sets: one waiting for the AI (its words ticked, name and words per day restored
@@ -561,9 +521,7 @@ public partial class VideoView : System.Windows.Controls.UserControl
             Status("Mọi video đều đã có phụ đề. Tích “Tạo lại cả video đã có phụ đề” nếu muốn tạo lại.");
             return;
         }
-        // Videos with English subtitles inside need no model.
-        var needsModel = (queue ? Pending.Select(i => i.Path) : [_mediaPath!]).Any(p => EmbeddedEnglish(p) is null);
-        if (needsModel && !Transcriber.IsDownloaded(_store.Folder, model))
+        if (!Transcriber.IsDownloaded(_store.Folder, model))
         {
             var ok = System.Windows.MessageBox.Show(_host!,
                 $"Cần tải model nhận dạng giọng nói “{model.FileName}” (khoảng {model.SizeMb} MB, từ Hugging Face) một lần duy nhất. Tải ngay?",
@@ -576,7 +534,7 @@ public partial class VideoView : System.Windows.Controls.UserControl
         SetBusy(true);
         try
         {
-            if (needsModel && !Transcriber.IsDownloaded(_store.Folder, model))
+            if (!Transcriber.IsDownloaded(_store.Folder, model))
             {
                 StageText.Text = $"Đang tải model {model.FileName}…";
                 await Transcriber.DownloadAsync(_store.Folder, model,
@@ -602,14 +560,11 @@ public partial class VideoView : System.Windows.Controls.UserControl
         }
     }
 
-    /// <summary>
-    /// One video: its English subtitles taken from inside it, or else recognised; then saved next to it (or where the
-    /// learner chooses, if one exists).
-    /// </summary>
+    /// <summary>One video: recognised, then saved next to it (or where the learner chooses, if one exists).</summary>
     private async Task RunOneAsync(SpeechModel model, string path, CancellationToken cancel)
     {
         var started = DateTime.Now;
-        var lines = await SubtitlesOfAsync(model, path, "", null, cancel);
+        var lines = await RecogniseAsync(model, path, "", null, cancel);
         StageText.Text = $"Xong {lines.Count} dòng trong {Took(started)}.";
         if (lines.Count == 0) { Status("Không nhận ra lời nói tiếng Anh nào trong video."); return; }
         var target = SrtPathFor(path);
@@ -634,11 +589,11 @@ public partial class VideoView : System.Windows.Controls.UserControl
             _mediaPath = _videoPath = item.Path;
             FileText.Text = item.Name;
             PlanNameBox.Text = Path.GetFileNameWithoutExtension(item.Path);
-            item.Set(EmbeddedEnglish(item.Path) is null ? "Đang tách âm thanh…" : "Đang lấy phụ đề có sẵn…", WorkInk);
+            item.Set("Đang tách âm thanh…", WorkInk);
             var itemStarted = DateTime.Now;
             try
             {
-                var lines = await SubtitlesOfAsync(model, item.Path, $"Video {n + 1}/{todo.Count} · ",
+                var lines = await RecogniseAsync(model, item.Path, $"Video {n + 1}/{todo.Count} · ",
                     p => item.Set($"Đang nhận dạng… {p}%", WorkInk), cancel);
                 if (lines.Count == 0)
                 {
@@ -665,16 +620,6 @@ public partial class VideoView : System.Windows.Controls.UserControl
         StageText.Text = $"Xong hàng đợi trong {Took(started)}.";
         Status($"Đã tạo phụ đề cho {done}/{todo.Count} video" + (failed > 0 ? $", {failed} video không tạo được (xem dòng màu đỏ)" : "")
                + ". Các file .srt nằm cạnh từng video; bấm vào một video để xem phụ đề, phát video hoặc tìm từ mới.");
-    }
-
-    /// <summary>The English subtitles inside the video when it has some (much faster and exact), else what Whisper hears.</summary>
-    private async Task<List<SubtitleLine>> SubtitlesOfAsync(SpeechModel model, string path, string prefix, Action<int>? percent, CancellationToken cancel)
-    {
-        if (EmbeddedEnglish(path) is not { } track) return await RecogniseAsync(model, path, prefix, percent, cancel);
-        StageText.Text = $"{prefix}Đang lấy phụ đề tiếng Anh có sẵn trong video…";
-        var lines = await ReadEmbeddedAsync(path, track, cancel);
-        SetLines(lines);
-        return lines;
     }
 
     /// <summary>Recognises one file, showing the lines as they come; <paramref name="prefix"/> says which video of the queue.</summary>

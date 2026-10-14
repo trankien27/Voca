@@ -144,25 +144,6 @@ public static partial class Matroska
             .FirstOrDefault();
 
     /// <summary>
-    /// The .srt next to <paramref name="video"/>; for an .mkv without one, written first from the English subtitles
-    /// inside it. Null when there is neither. Used by the phone, which shows a video's subtitles only from its .srt.
-    /// </summary>
-    public static string? EnsureSrt(string video)
-    {
-        var srt = Path.ChangeExtension(video, ".srt");
-        if (File.Exists(srt)) return srt;
-        if (!IsMatroska(video) || BestEnglishSubtitles(ReadTracks(video)) is not { } track) return null;
-        try
-        {
-            var lines = ReadSubtitles(video, track.Number);
-            if (lines.Count == 0) return null;
-            File.WriteAllText(srt, Subtitles.ToSrt(lines), new UTF8Encoding(false));
-            return srt;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException) { return null; }
-    }
-
-    /// <summary>
     /// The bytes to change so Windows reads audio track <paramref name="keep"/> as the only one: every other audio
     /// track gets a track number no block carries, so its sound is left out (Windows refuses a file whose track types
     /// were changed, but skips blocks of a track it does not know). The checksum of the track list, when it has one —

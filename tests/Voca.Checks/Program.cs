@@ -1170,13 +1170,15 @@ using (var mkStream = new PatchedStream(File.OpenRead(mkFile), mkPatches))
     Check(mkRead.SequenceEqual(mkBytes) && !File.ReadAllBytes(mkFile).SequenceEqual(mkBytes),
         "mkv: the file is read with the bytes changed, the file itself untouched");
 }
-var mkSrt = Path.ChangeExtension(mkFile, ".srt");
-var mkEnsured = Matroska.EnsureSrt(mkFile);
-File.WriteAllText(mkSrt, "kept");
-Check(mkEnsured == mkSrt && Matroska.EnsureSrt(mkFile) == mkSrt && File.ReadAllText(mkSrt) == "kept"
-      && Matroska.EnsureSrt(Path.Combine(Path.GetTempPath(), "voca-no-subtitles-" + Guid.NewGuid().ToString("N") + ".mp4")) is null,
-    "mkv: an .mkv without .srt gets one from its English subtitles; an existing .srt is left alone");
-File.Delete(mkSrt);
+var mkPhoneDir = Directory.CreateTempSubdirectory("voca-mkv-phone").FullName;
+var mkPhoneVideo = Path.Combine(mkPhoneDir, "Episode 1.mkv");
+File.Copy(mkFile, mkPhoneVideo);
+phStore.Update(d => d.Settings.PhoneVideoFolders = [mkPhoneDir]);
+var mkPhoneLines = PhJson(phApi.Handle(PhReq("GET", "/api/video", cookie: phCookie, query: new() { ["id"] = PhoneVideos.Id(mkPhoneVideo) }))).GetProperty("lines");
+Check(mkPhoneLines.GetArrayLength() == 4 && !File.Exists(Path.ChangeExtension(mkPhoneVideo, ".srt")),
+    "phone videos: an mkv without .srt shows the English subtitles inside it, and no .srt is written (left to Whisper)");
+phStore.Update(d => d.Settings.PhoneVideoFolders = []);
+Directory.Delete(mkPhoneDir, recursive: true);
 File.Delete(mkFile);
 File.Delete(mkPatched);
 

@@ -432,13 +432,6 @@ public sealed class PhoneApi(Store store, Func<DateTime>? clock = null)
         return _videos.TryGetValue(id, out var video) ? video : throw new KeyNotFoundException();
     }
 
-    /// <summary>The video with its subtitles: an .mkv without an .srt gets one from the English subtitles inside it.</summary>
-    private PhoneVideo FindWithSubtitles(string id)
-    {
-        var video = FindVideo(id);
-        if (video.Srt is not null || Matroska.EnsureSrt(video.Path) is not { } srt) return video;
-        return _videos[id] = video with { Srt = srt };
-    }
 
     private static string Name(string path) => Path.GetFileNameWithoutExtension(path);
 
@@ -523,7 +516,7 @@ public sealed class PhoneApi(Store store, Func<DateTime>? clock = null)
     /// <summary>One video to play: its subtitles with each word marked as on the computer, where to start and what comes next.</summary>
     private object Video(string id)
     {
-        var video = FindWithSubtitles(id);
+        var video = FindVideo(id);
         var lines = ReadLines(video);
         var marker = new WordMarker(Data, Subtitles.NewWords(Data, lines));
         var nextVideo = NextOf(video);
@@ -549,11 +542,23 @@ public sealed class PhoneApi(Store store, Func<DateTime>? clock = null)
         };
     }
 
-    private static List<SubtitleLine> ReadLines(PhoneVideo video)
+    /// <summary>The English subtitles inside an .mkv, read once per video and kept while Voca runs (no .srt is written).</summary>
+    private readonly Dictionary<string, List<SubtitleLine>> _inside = [];
+
+    /// <summary>
+    /// The video's .srt; for an .mkv without one, the English subtitles inside it for now (only in memory, so the
+    /// .srt is still left to Whisper or to “Tách phụ đề từ mkv” on the computer).
+    /// </summary>
+    private List<SubtitleLine> ReadLines(PhoneVideo video)
     {
-        if (video.Srt is null) return [];
-        try { return Subtitles.ReadSrt(File.ReadAllText(video.Srt)).OrderBy(l => l.Start).ToList(); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return []; }
+        try
+        {
+            if (video.Srt is not null) return Subtitles.ReadSrt(File.ReadAllText(video.Srt)).OrderBy(l => l.Start).ToList();
+            if (_inside.TryGetValue(video.Path, out var kept)) return kept;
+            var track = Matroska.IsMatroska(video.Path) ? Matroska.BestEnglishSubtitles(Matroska.ReadTracks(video.Path)) : null;
+            return _inside[video.Path] = track is null ? [] : Matroska.ReadSubtitles(video.Path, track.Number);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException) { return []; }
     }
 
     /// <summary>"/media/&lt;id&gt;" streams the file (the part a "Range" header asks for); "/media/&lt;id&gt;.vtt" its subtitles.</summary>
@@ -561,7 +566,7 @@ public sealed class PhoneApi(Store store, Func<DateTime>? clock = null)
     {
         var name = request.Path["/media/".Length..];
         if (name.EndsWith(".vtt"))
-            return PhoneResponse.Text(200, "text/vtt; charset=utf-8", PhoneVideos.ToVtt(ReadLines(FindWithSubtitles(name[..^4]))));
+            return PhoneResponse.Text(200, "text/vtt; charset=utf-8", PhoneVideos.ToVtt(ReadLines(FindVideo(name[..^4]))));
         var video = FindVideo(name);
         long size;
         try { size = new FileInfo(video.Path).Length; }
