@@ -19,6 +19,8 @@
         <Grid x:Name="Stage" Background="Black" MouseLeftButtonUp="Stage_Click">
             <MediaElement x:Name="Media" LoadedBehavior="Manual" UnloadedBehavior="Close" Stretch="Uniform"
                           MediaOpened="Media_Opened" MediaEnded="Media_Ended" MediaFailed="Media_Failed"/>
+            <!-- the picture when libVLC plays the video (VlcPlayback) -->
+            <Image x:Name="Picture" Stretch="Uniform" Visibility="Collapsed" RenderOptions.BitmapScalingMode="Linear"/>
             <Border x:Name="SubtitlePanel" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="40,0,40,28"
                     Background="#B3000000" CornerRadius="8" Padding="16,8" Visibility="Collapsed"
                     MouseEnter="Subtitle_MouseEnter" MouseLeave="Subtitle_MouseLeave" MouseLeftButtonUp="Subtitle_Click">
@@ -38,6 +40,18 @@
             <Border x:Name="Toast" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,12,0,0" Background="#E6172033" CornerRadius="8"
                     Padding="14,7" Visibility="Collapsed" IsHitTestVisible="False">
                 <TextBlock x:Name="ToastText" Foreground="White" FontSize="13" TextWrapping="Wrap" MaxWidth="520"/>
+            </Border>
+            <!-- offer of the VLC player: for what Windows cannot play, or to switch the audio track -->
+            <Border x:Name="VlcPanel" VerticalAlignment="Center" HorizontalAlignment="Center" Background="#F2172033" CornerRadius="10"
+                    Padding="20,16" Width="480" Visibility="Collapsed" MouseLeftButtonUp="VlcPanel_Click">
+                <StackPanel>
+                    <TextBlock x:Name="VlcText" Foreground="White" FontSize="14" TextWrapping="Wrap"/>
+                    <ProgressBar x:Name="VlcProgress" Height="6" Margin="0,12,0,0" Maximum="1" Visibility="Collapsed"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+                        <Button x:Name="VlcCloseButton" Style="{StaticResource Control}" Content="Để sau" Margin="0,0,8,0" Click="VlcClose_Click"/>
+                        <Button x:Name="VlcInstallButton" Content="Tải bộ phát VLC" Click="VlcInstall_Click" Padding="12,5"/>
+                    </StackPanel>
+                </StackPanel>
             </Border>
         </Grid>
 
@@ -59,6 +73,14 @@
                         <ComboBoxItem Content="1.25×" Tag="1.25"/>
                         <ComboBoxItem Content="1.5×" Tag="1.5"/>
                     </ComboBox>
+                    <ComboBox x:Name="AudioBox" Width="150" Margin="6,0,0,0" VerticalAlignment="Center" DisplayMemberPath="Label"
+                              Visibility="Collapsed" SelectionChanged="AudioBox_SelectionChanged" DropDownOpened="AudioBox_DropDownOpened"
+                              ToolTip="Tiếng (track âm thanh) của video (A)"/>
+                    <Button x:Name="AudioOfferButton" Style="{StaticResource Control}" Content="🔊 Đổi tiếng…" Margin="6,0,0,0" Visibility="Collapsed"
+                            Click="AudioOffer_Click" ToolTip="Video có nhiều tiếng; cần bộ phát VLC để đổi"/>
+                    <ComboBox x:Name="SubtitleBox" Width="170" Margin="6,0,0,0" VerticalAlignment="Center" DisplayMemberPath="Label"
+                              Visibility="Collapsed" SelectionChanged="SubtitleBox_SelectionChanged"
+                              ToolTip="Phụ đề hiện trên video: file .srt hoặc phụ đề có sẵn trong video"/>
                     <ToggleButton x:Name="SubtitleToggle" Content="CC" IsChecked="True" Margin="6,0,0,0" Padding="8,5" Click="SubtitleToggle_Click"
                                   ToolTip="Bật / tắt phụ đề (C)"/>
                     <Button Style="{StaticResource Control}" Content="⛶" Click="FullScreen_Click" ToolTip="Toàn màn hình (F, Esc để thoát)"/>

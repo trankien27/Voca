@@ -1068,5 +1068,110 @@ Check(PhJson(phApi.Handle(PhReq("GET", "/api/videos", cookie: phCookie))).GetPro
 phStore.Update(d => d.Settings.FilmFolder = "");
 Directory.Delete(fmRoot, recursive: true);
 
+// ---------- mkv: tracks, subtitles inside, one audio track for Windows ----------
+static byte[] MkEl(uint id, params byte[][] children)
+{
+    var payload = children.SelectMany(c => c).ToArray();
+    var idBytes = BitConverter.GetBytes(id).Reverse().SkipWhile(b => b == 0).ToArray();
+    var n = payload.Length;
+    return [.. idBytes, (byte)(0x10 | (n >> 24)), (byte)(n >> 16), (byte)(n >> 8), (byte)n, .. payload];
+}
+static byte[] MkUInt(uint id, byte value) => MkEl(id, [value]);
+static byte[] MkText(uint id, string text) => MkEl(id, System.Text.Encoding.UTF8.GetBytes(text));
+static uint MkCrc(ReadOnlySpan<byte> data)
+{
+    var crc = 0xFFFFFFFFu;
+    foreach (var b in data) { crc ^= b; for (var k = 0; k < 8; k++) crc = (crc & 1) != 0 ? 0xEDB88320 ^ (crc >> 1) : crc >> 1; }
+    return ~crc;
+}
+static byte[] MkBlock(int track, short rel, string text, bool zlib = false)
+{
+    var data = System.Text.Encoding.UTF8.GetBytes(text);
+    if (zlib)
+    {
+        using var packed = new MemoryStream();
+        using (var z = new System.IO.Compression.ZLibStream(packed, System.IO.Compression.CompressionLevel.Optimal)) z.Write(data);
+        data = packed.ToArray();
+    }
+    return [(byte)(0x80 | track), (byte)(rel >> 8), (byte)rel, 0, .. data];
+}
+static byte[] MkGroup(int track, short rel, int duration, string text, bool zlib = false) =>
+    MkEl(0xA0, MkEl(0xA1, MkBlock(track, rel, text, zlib)), MkEl(0x9B, [(byte)(duration >> 8), (byte)duration]));
+static byte[] MkTrack(byte number, byte type, string codec, params byte[][] more) =>
+    MkEl(0xAE, [MkUInt(0xD7, number), MkUInt(0x83, type), MkText(0x86, codec), .. more]);
+
+var mkEntries = new[]
+{
+    MkTrack(1, 1, "V_MPEG4/ISO/AVC"),
+    MkTrack(2, 2, "A_AAC", MkText(0x22B59C, "jpn"), MkText(0x536E, "Japanese")),
+    MkTrack(3, 2, "A_AAC", MkUInt(0x88, 0)), // no Language element: English by the Matroska default
+    MkTrack(4, 0x11, "S_TEXT/ASS", MkText(0x22B59C, "eng"), MkUInt(0x55AA, 1), MkText(0x536E, "Signs")),
+    MkTrack(5, 0x11, "S_TEXT/ASS", MkText(0x22B59C, "eng"), MkEl(0x6D80, MkEl(0x6240, MkEl(0x5034, MkUInt(0x4254, 0))))),
+    MkTrack(6, 0x11, "S_TEXT/UTF8", MkText(0x22B59C, "eng")),
+}.SelectMany(e => e).ToArray();
+var mkCrc = BitConverter.GetBytes(MkCrc(mkEntries)); // little-endian, as Matroska stores it
+var mkFile = Path.Combine(Path.GetTempPath(), "voca-mkv-" + Guid.NewGuid().ToString("N") + ".mkv");
+File.WriteAllBytes(mkFile, [
+    .. MkEl(0x1A45DFA3, MkText(0x4282, "matroska")),
+    .. MkEl(0x18538067,
+        MkEl(0x1549A966, MkEl(0x2AD7B1, [0x0F, 0x42, 0x40])), // 1 ms per tick
+        MkEl(0x1654AE6B, MkEl(0xBF, mkCrc), mkEntries),
+        MkEl(0x1F43B675,
+            MkEl(0xE7, [0x03, 0xE8]), // cluster at 1 s
+            MkEl(0xA3, MkBlock(2, 0, "audio bytes")),
+            MkGroup(5, 0, 1500, @"1,0,Default,,0,0,0,,{\i1}Hello\Nthere", zlib: true),
+            MkEl(0xA3, MkBlock(6, 500, "<i>Plain</i> line")),
+            MkGroup(5, 2000, 1000, "2,0,OP Romaji,,0,0,0,,mijika ni arumono", zlib: true),
+            MkGroup(5, 2000, 1000, @"3,0,Default,,0,0,0,,{\p1}m 0 0 l 10 10{\p0}Look out!", zlib: true),
+            MkGroup(5, 5000, 1000, "4,0,Default,,0,0,0,,A: Hi", zlib: true),
+            MkGroup(5, 5000, 1000, "5,0,Default,,0,0,0,,B: Yo", zlib: true),
+            MkGroup(4, 5000, 1000, "6,0,Sign,,0,0,0,,EXIT")),
+        MkEl(0x1F43B675,
+            MkEl(0xE7, [0x27, 0x10]), // cluster at 10 s
+            MkGroup(5, 0, 2000, @"7,0,Default,,0,0,0,,Second\hcluster", zlib: true)))
+]);
+var mkTracks = Matroska.ReadTracks(mkFile);
+Check(mkTracks.Select(t => t.Kind).SequenceEqual([MkvTrackKind.Video, MkvTrackKind.Audio, MkvTrackKind.Audio, MkvTrackKind.Subtitle, MkvTrackKind.Subtitle, MkvTrackKind.Subtitle])
+      && mkTracks[1].Language == "jpn" && mkTracks[1].Label == "Tiếng Nhật · Japanese" && mkTracks[2].IsEnglish && !mkTracks[2].Default
+      && mkTracks[3].Forced && mkTracks.Count(t => t.IsText) == 3,
+    "mkv: tracks read with kind, language (English when left out), name and flags");
+Check(Matroska.BestEnglishSubtitles(mkTracks)?.Number == 5, "mkv: the English dialogue track is preferred over the forced signs track");
+var mkLines = Matroska.ReadSubtitles(mkFile, 5);
+Check(mkLines.Select(l => (l.Start.TotalSeconds, l.End.TotalSeconds, l.Text)).SequenceEqual(
+        [(1.0, 2.5, "Hello\nthere"), (3.0, 4.0, "Look out!"), (6.0, 7.0, "A: Hi\nB: Yo"), (10.0, 12.0, "Second cluster")]),
+    "mkv: ASS subtitles inside (zlib-packed) read as lines: styling and drawings dropped, songs left out, lines of one moment joined");
+Check(Matroska.ReadSubtitles(mkFile, 6) is [{ Text: "Plain line" } plain] && plain.Start == TimeSpan.FromSeconds(1.5) && plain.End == TimeSpan.FromSeconds(5.5),
+    "mkv: SRT subtitles inside read without tags; a block without duration lasts 4 s at most");
+Check(Matroska.ReadSubtitles(mkFile, 4) is [{ Text: "EXIT" }], "mkv: a track with only signs keeps them");
+var mkFake = Path.ChangeExtension(mkFile, ".fake.mkv");
+File.WriteAllText(mkFake, "not a video");
+Check(Matroska.ReadTracks(Path.Combine(Path.GetTempPath(), "voca-missing.mkv")).Count == 0 && Matroska.ReadTracks(mkFake).Count == 0,
+    "mkv: a missing or non-Matroska file has no tracks");
+File.Delete(mkFake);
+
+var mkPatches = Matroska.KeepAudio(mkFile, 3);
+var mkBytes = File.ReadAllBytes(mkFile);
+foreach (var p in mkPatches) mkBytes[p.Offset] = p.Value;
+var mkPatched = Path.ChangeExtension(mkFile, ".patched.mkv");
+File.WriteAllBytes(mkPatched, mkBytes);
+var mkCrcAt = mkBytes.AsSpan().IndexOf((ReadOnlySpan<byte>)[0xBF, 0x10, 0, 0, 4]) + 5; // the CRC-32 element: id, 4-byte size, then its 4 bytes
+var mkPatchedTracks = Matroska.ReadTracks(mkPatched);
+Check(mkPatchedTracks.Where(t => t.Kind == MkvTrackKind.Audio).Select(t => t.Number).SequenceEqual([255, 3])
+      && BitConverter.ToUInt32(mkBytes, mkCrcAt) == MkCrc(mkBytes.AsSpan(mkCrcAt + 4, mkEntries.Length))
+      && mkPatches.Count == 1 + 4 && Matroska.KeepAudio(mkFile, 2).Count == 5,
+    "mkv: keeping one audio track gives the others an unused number and fixes the track list's CRC-32");
+using (var mkStream = new PatchedStream(File.OpenRead(mkFile), mkPatches))
+{
+    var mkRead = new byte[mkBytes.Length];
+    mkStream.Position = 0;
+    var mkHalf = mkRead.Length / 2;
+    mkStream.ReadExactly(mkRead, 0, mkHalf); // read in two parts: patches on either side of the cut still apply
+    mkStream.ReadExactly(mkRead, mkHalf, mkRead.Length - mkHalf);
+    Check(mkRead.SequenceEqual(mkBytes) && !File.ReadAllBytes(mkFile).SequenceEqual(mkBytes),
+        "mkv: the file is read with the bytes changed, the file itself untouched");
+}
+File.Delete(mkFile);
+File.Delete(mkPatched);
+
 Console.WriteLine(fails == 0 ? "\nALL PASSED" : $"\n{fails} FAILED");
 return fails == 0 ? 0 : 1;

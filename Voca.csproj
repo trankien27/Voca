@@ -9,10 +9,13 @@
     <AssemblyName>Voca</AssemblyName>
     <RootNamespace>Voca</RootNamespace>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <Version>2.19.3</Version>
+    <Version>2.20.0</Version>
     <Product>Voca</Product>
   </PropertyGroup>
   <ItemGroup>
+    <!-- The video player for files Windows cannot play (mkv with 10-bit video, AC3 …) and for picking the audio track;
+         libVLC itself is downloaded on first use (Services\VlcRuntime.cs). -->
+    <PackageReference Include="LibVLCSharp" Version="3.9.7.1" />
     <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
     <PackageReference Include="QRCoder" Version="1.4.3" />
     <PackageReference Include="System.Speech" Version="8.0.0" />

@@ -18,6 +18,10 @@ namespace Voca;
 /// so it can be read; "Đọc phụ đề" opens all of them as a text to read. Where the video stands is saved every
 /// few seconds while it plays and on pause, close and end, so it resumes at that second next time (even after
 /// a crash) — see <see cref="WatchProgress"/>.
+/// Windows' own player is used until the VLC player is downloaded (<see cref="VlcRuntime"/>); from then on VLC plays
+/// every video, which also lets the learner switch the audio track of a film with several (English / Japanese).
+/// The offer to download it appears when Windows cannot play a video or when the video has several audio tracks.
+/// Subtitles stored inside an .mkv can be picked as the line shown, instead of the .srt.
 /// </summary>
 public partial class VideoPlayerWindow : Window
 {
@@ -26,44 +30,67 @@ public partial class VideoPlayerWindow : Window
     private readonly Store _store;
     private readonly string _name;
     private readonly string _videoPath;
-    private readonly IReadOnlyList<SubtitleLine> _lines;
-    private readonly IReadOnlyList<VideoWord> _newWords;
+    /// <summary>The subtitles the video was opened with (its .srt), and their new words.</summary>
+    private readonly IReadOnlyList<SubtitleLine> _givenLines;
+    private readonly IReadOnlyList<VideoWord> _givenNewWords;
+    private IReadOnlyList<SubtitleLine> _lines;
+    private IReadOnlyList<VideoWord> _newWords;
+    /// <summary>The tracks of an .mkv (empty for other files).</summary>
+    private readonly IReadOnlyList<MkvTrack> _tracks;
     private readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private readonly DispatcherTimer _toastTimer = new() { Interval = TimeSpan.FromSeconds(3) };
     /// <summary>Saves the position while playing, so a crash or power cut loses a few seconds at most.</summary>
     private readonly DispatcherTimer _saveTimer = new() { Interval = TimeSpan.FromSeconds(5) };
     private WordMarker _marker;
     private SubtitleLine? _shown;
-    private bool _playing, _seeking, _pausedByHover, _fullScreen, _finished;
+    private bool _playing, _seeking, _pausedByHover, _fullScreen, _finished, _listing, _audioListed, _closed;
     /// <summary>Where to jump once the video is open (where it was left off last time).</summary>
     private TimeSpan _start;
     private WindowState _stateBeforeFullScreen;
+    /// <summary>The VLC player, once downloaded; null while Windows' player (<see cref="Media"/>) plays the video.</summary>
+    private VlcPlayback? _vlc;
+    private CancellationTokenSource? _install;
+    private int _subtitleLoad;
+
+    private sealed record SubtitleChoice(string Label, int Track); // Track 0: the subtitles the video was opened with
 
     public VideoPlayerWindow(Store store, string videoPath, IReadOnlyList<SubtitleLine> lines, IReadOnlyList<VideoWord> newWords,
         TimeSpan start = default)
     {
         InitializeComponent();
         _store = store;
-        _lines = lines.OrderBy(l => l.Start).ToList();
-        _newWords = newWords;
+        _lines = _givenLines = lines.OrderBy(l => l.Start).ToList();
+        _newWords = _givenNewWords = newWords;
         _marker = new WordMarker(store.Data, newWords);
         _name = Path.GetFileNameWithoutExtension(videoPath);
         _videoPath = videoPath;
         _start = start;
+        _tracks = Matroska.IsMatroska(videoPath) ? Matroska.ReadTracks(videoPath) : [];
         Title = $"Voca · {Path.GetFileName(videoPath)}";
         _tick.Tick += (_, _) => Update();
         _toastTimer.Tick += (_, _) => { Toast.Visibility = Visibility.Collapsed; _toastTimer.Stop(); };
         _saveTimer.Tick += (_, _) => SaveProgress();
-        Media.Source = new Uri(videoPath);
+        if (!VlcRuntime.IsInstalled(store.Folder) || !StartVlc()) Media.Source = new Uri(videoPath);
+        ListSubtitles();
         // MediaElement only opens its source once it is part of a shown window.
         ContentRendered += (_, _) => Play();
     }
 
     // ---------------------------------- playback ----------------------------------
 
+    private TimeSpan Position
+    {
+        get => _vlc?.Position ?? Media.Position;
+        set { if (_vlc is not null) _vlc.Position = value; else Media.Position = value; }
+    }
+
+    private TimeSpan? Length => _vlc is not null ? _vlc.Length
+        : Media.NaturalDuration.HasTimeSpan ? Media.NaturalDuration.TimeSpan : null;
+
     private void Play()
     {
-        Media.Play();
+        if (_vlc is not null) _vlc.Play();
+        else Media.Play();
         _playing = true;
         _finished = false;
         _pausedByHover = false;
@@ -74,7 +101,8 @@ public partial class VideoPlayerWindow : Window
 
     private void Pause()
     {
-        Media.Pause();
+        if (_vlc is not null) _vlc.Pause();
+        else Media.Pause();
         _playing = false;
         _saveTimer.Stop();
         PlayButton.Content = "▶";
@@ -91,56 +119,270 @@ public partial class VideoPlayerWindow : Window
     /// <summary>Remembers where the video stands, for the next time it is played and for "Xem tiếp".</summary>
     private void SaveProgress(TimeSpan? at = null)
     {
-        if (!Media.NaturalDuration.HasTimeSpan) return; // never opened (or failed): nothing to resume
-        WatchProgress.Record(_store.Folder, _videoPath, at ?? Media.Position, Media.NaturalDuration.TimeSpan, DateTime.Now);
+        if (Length is not { } length) return; // never opened (or failed): nothing to resume
+        WatchProgress.Record(_store.Folder, _videoPath, at ?? Position, length, DateTime.Now);
     }
 
     private void SeekTo(TimeSpan time)
     {
-        var length = Media.NaturalDuration.HasTimeSpan ? Media.NaturalDuration.TimeSpan : TimeSpan.MaxValue;
-        Media.Position = time < TimeSpan.Zero ? TimeSpan.Zero : time > length ? length : time;
+        var length = Length ?? TimeSpan.MaxValue;
+        Position = time < TimeSpan.Zero ? TimeSpan.Zero : time > length ? length : time;
         Update();
     }
 
-    private void Media_Opened(object sender, RoutedEventArgs e)
+    private void Media_Opened(object sender, RoutedEventArgs e) => Opened();
+
+    private void Opened()
     {
-        Seek.Maximum = Media.NaturalDuration.HasTimeSpan ? Media.NaturalDuration.TimeSpan.TotalSeconds : 1;
+        Seek.Maximum = Length?.TotalSeconds ?? 1;
         if (_start > TimeSpan.Zero)
         {
-            Media.Position = _start;
+            Position = _start;
             ShowToast($"Xem tiếp từ {Clock(_start)} · ← lùi 5 giây, kéo thanh thời gian để xem từ đầu");
             _start = TimeSpan.Zero;
         }
+        ListAudio();
         Update();
     }
 
-    private void Media_Ended(object sender, RoutedEventArgs e)
+    private void Media_Ended(object sender, RoutedEventArgs e) => Ended();
+
+    private void Ended()
     {
         Pause();
-        if (Media.NaturalDuration.HasTimeSpan) SaveProgress(Media.NaturalDuration.TimeSpan);
+        if (Length is { } length) SaveProgress(length);
         _finished = true;
-        Media.Position = TimeSpan.Zero;
+        Position = TimeSpan.Zero;
     }
 
-    private void Media_Failed(object? sender, ExceptionRoutedEventArgs e)
+    private void Media_Failed(object? sender, ExceptionRoutedEventArgs e) => Failed(e.ErrorException.Message);
+
+    private void Failed(string message)
     {
         _tick.Stop();
+        if (_vlc is null)
+        {
+            OfferVlc($"Windows không phát được video này ({message}).\n\nBộ phát VLC phát được hầu hết mọi video (mkv, video 10-bit, HEVC, âm thanh AC3…) " +
+                     $"và đổi được tiếng khi phim có nhiều tiếng. Tải về một lần, khoảng {VlcRuntime.DownloadMb} MB.");
+            return;
+        }
         SubtitlePanel.Visibility = Visibility.Visible;
         SubtitleText.Inlines.Clear();
-        SubtitleText.Text = $"Không phát được video này: {e.ErrorException.Message}\nThử chuyển video sang mp4 (H.264).";
+        SubtitleText.Text = message;
     }
 
     /// <summary>Moves the seek bar and time, and shows the line for the current position.</summary>
     private void Update()
     {
-        var now = Media.Position;
+        var now = Position;
+        var total = Length ?? TimeSpan.Zero;
+        if (total > TimeSpan.Zero && Seek.Maximum != total.TotalSeconds) Seek.Maximum = total.TotalSeconds;
         if (!_seeking) Seek.Value = now.TotalSeconds;
-        var total = Media.NaturalDuration.HasTimeSpan ? Media.NaturalDuration.TimeSpan : TimeSpan.Zero;
         TimeText.Text = $"{Clock(now)} / {Clock(total)}";
         ShowLine(Subtitles.LineAt(_lines, now));
+        if (_vlc is { IsOpen: true } && !_audioListed) ListAudio(); // libVLC may learn the tracks a moment after it starts
     }
 
     internal static string Clock(TimeSpan t) => t.TotalHours >= 1 ? t.ToString(@"h\:mm\:ss") : t.ToString(@"m\:ss");
+
+    // ---------------------------------- VLC ----------------------------------
+
+    /// <summary>Plays the video with VLC from now on; false (Windows' player stays) when libVLC cannot be loaded.</summary>
+    private bool StartVlc()
+    {
+        try
+        {
+            _vlc = new VlcPlayback(_store.Folder, Dispatcher, bitmap => Picture.Source = bitmap);
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Không mở được bộ phát VLC ({ex.Message}), dùng trình phát của Windows.");
+            return false;
+        }
+        _vlc.Opened += Opened;
+        _vlc.Ended += Ended;
+        _vlc.Failed += Failed;
+        _vlc.Open(_videoPath);
+        if (SpeedBox.SelectedItem is ComboBoxItem { Tag: string tag } && double.TryParse(tag, System.Globalization.CultureInfo.InvariantCulture, out var speed))
+            _vlc.Speed = speed;
+        Media.Visibility = Visibility.Collapsed;
+        Picture.Visibility = Visibility.Visible;
+        AudioOfferButton.Visibility = Visibility.Collapsed;
+        return true;
+    }
+
+    private void OfferVlc(string text)
+    {
+        VlcText.Text = text;
+        VlcProgress.Visibility = Visibility.Collapsed;
+        VlcInstallButton.IsEnabled = true;
+        VlcCloseButton.Content = "Để sau";
+        VlcPanel.Visibility = Visibility.Visible;
+    }
+
+    private void AudioOffer_Click(object sender, RoutedEventArgs e)
+    {
+        var audio = _tracks.Where(t => t.Kind == MkvTrackKind.Audio).Select(t => t.Label).ToList();
+        OfferVlc($"Video này có {audio.Count} tiếng: {string.Join(", ", audio)}. Trình phát của Windows chỉ phát được một tiếng và không đổi được.\n\n" +
+                 $"Bộ phát VLC đổi được tiếng ngay khi đang xem (và phát được hầu hết mọi video). Tải về một lần, khoảng {VlcRuntime.DownloadMb} MB.");
+    }
+
+    /// <summary>Downloads VLC, then carries on with it from where the video is.</summary>
+    private async void VlcInstall_Click(object sender, RoutedEventArgs e)
+    {
+        if (_install is not null) return;
+        _install = new CancellationTokenSource();
+        VlcInstallButton.IsEnabled = false;
+        VlcCloseButton.Content = "Hủy";
+        VlcProgress.Value = 0;
+        VlcProgress.Visibility = Visibility.Visible;
+        VlcText.Text = "Đang tải bộ phát VLC…";
+        try
+        {
+            await VlcRuntime.InstallAsync(_store.Folder,
+                new Progress<double>(p => { VlcProgress.Value = p; VlcText.Text = $"Đang tải bộ phát VLC… {p:P0}"; }), _install.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            VlcPanel.Visibility = Visibility.Collapsed;
+            return;
+        }
+        catch (Exception ex)
+        {
+            VlcText.Text = $"Không tải được bộ phát VLC: {ex.Message}";
+            VlcProgress.Visibility = Visibility.Collapsed;
+            VlcInstallButton.IsEnabled = true;
+            VlcInstallButton.Content = "Thử lại";
+            VlcCloseButton.Content = "Để sau";
+            return;
+        }
+        finally
+        {
+            _install?.Dispose();
+            _install = null;
+        }
+        if (_closed) return;
+        VlcPanel.Visibility = Visibility.Collapsed;
+        SwitchToVlc();
+    }
+
+    private void SwitchToVlc()
+    {
+        var at = Length is not null ? Position : _start;
+        if (_playing) Pause();
+        Media.Close();
+        Media.Source = null;
+        _start = TimeSpan.Zero;
+        if (!StartVlc()) return;
+        _vlc!.Position = at;
+        SubtitlePanel.Visibility = Visibility.Collapsed;
+        Play();
+        ShowToast("Đã chuyển sang bộ phát VLC" + (_tracks.Count(t => t.Kind == MkvTrackKind.Audio) > 1 ? " · chọn tiếng ở ô bên phải thanh điều khiển (phím A)" : ""));
+    }
+
+    private void VlcClose_Click(object sender, RoutedEventArgs e)
+    {
+        if (_install is not null) _install.Cancel();
+        else VlcPanel.Visibility = Visibility.Collapsed;
+    }
+
+    private void VlcPanel_Click(object sender, MouseButtonEventArgs e) => e.Handled = true; // not a click on the video
+
+    // ---------------------------------- audio tracks ----------------------------------
+
+    /// <summary>Fills the audio box from VLC (shown when there is more than one track); with Windows' player, offers VLC instead.</summary>
+    private void ListAudio()
+    {
+        if (_vlc is null)
+        {
+            AudioOfferButton.Visibility = _tracks.Count(t => t.Kind == MkvTrackKind.Audio) > 1 ? Visibility.Visible : Visibility.Collapsed;
+            return;
+        }
+        var choices = _vlc.AudioTracks(_tracks);
+        _audioListed = choices.Count > 0;
+        _listing = true;
+        AudioBox.ItemsSource = choices;
+        AudioBox.SelectedItem = choices.FirstOrDefault(c => c.Id == _vlc.AudioTrack);
+        _listing = false;
+        AudioBox.Visibility = choices.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void AudioBox_DropDownOpened(object? sender, EventArgs e)
+    {
+        if (_vlc is not null && _vlc.AudioTracks(_tracks).Count != AudioBox.Items.Count) ListAudio();
+    }
+
+    private void AudioBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_listing || _vlc is null || AudioBox.SelectedItem is not AudioChoice choice || choice.Id == _vlc.AudioTrack) return;
+        _vlc.AudioTrack = choice.Id;
+        ShowToast($"Tiếng: {choice.Label}");
+    }
+
+    /// <summary>Key A: the next audio track.</summary>
+    private void NextAudio()
+    {
+        if (_vlc is null) { if (AudioOfferButton.Visibility == Visibility.Visible) AudioOffer_Click(this, new RoutedEventArgs()); return; }
+        if (AudioBox.Items.Count < 2) return;
+        AudioBox.SelectedIndex = (AudioBox.SelectedIndex + 1) % AudioBox.Items.Count;
+    }
+
+    // ---------------------------------- subtitle tracks ----------------------------------
+
+    /// <summary>
+    /// The subtitles to choose from: the .srt the video was opened with and the text subtitles inside an .mkv. With
+    /// no .srt, the English subtitles inside the video (dialogue rather than signs) are shown.
+    /// </summary>
+    private void ListSubtitles()
+    {
+        var choices = new List<SubtitleChoice>();
+        if (_givenLines.Count > 0) choices.Add(new SubtitleChoice("Phụ đề .srt", 0));
+        var inside = _tracks.Where(t => t.IsText).ToList();
+        choices.AddRange(inside.Zip(MkvTrack.ShortLabels(inside), (t, label) => new SubtitleChoice(label, t.Number)));
+        if (choices.Count == 0) return;
+        var best = Matroska.BestEnglishSubtitles(_tracks)?.Number;
+        var first = _givenLines.Count > 0 ? choices[0] : choices.FirstOrDefault(c => c.Track == best);
+        _listing = true;
+        SubtitleBox.ItemsSource = choices;
+        SubtitleBox.SelectedItem = first;
+        _listing = false;
+        SubtitleBox.Visibility = choices.Count > 1 || first is null ? Visibility.Visible : Visibility.Collapsed;
+        if (first is { Track: > 0 }) _ = LoadSubtitlesAsync(first);
+    }
+
+    private void SubtitleBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_listing && SubtitleBox.SelectedItem is SubtitleChoice choice) _ = LoadSubtitlesAsync(choice);
+    }
+
+    private async Task LoadSubtitlesAsync(SubtitleChoice choice)
+    {
+        var load = ++_subtitleLoad;
+        if (choice.Track == 0)
+        {
+            SetLines(_givenLines, _givenNewWords);
+            return;
+        }
+        try
+        {
+            var lines = await Task.Run(() => Matroska.ReadSubtitles(_videoPath, choice.Track));
+            if (load != _subtitleLoad || _closed) return; // another choice came after this one
+            SetLines(lines, Subtitles.NewWords(_store.Data, lines));
+            ShowToast(lines.Count == 0 ? "Track phụ đề này không có dòng chữ nào." : $"Phụ đề: {choice.Label} · {lines.Count} dòng");
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            if (load == _subtitleLoad) ShowToast($"Không đọc được phụ đề này: {ex.Message}");
+        }
+    }
+
+    private void SetLines(IReadOnlyList<SubtitleLine> lines, IReadOnlyList<VideoWord> newWords)
+    {
+        _lines = lines.OrderBy(l => l.Start).ToList();
+        _newWords = newWords;
+        _marker = new WordMarker(_store.Data, newWords);
+        ShowLine(Subtitles.LineAt(_lines, Position), force: true);
+    }
 
     // ---------------------------------- subtitle ----------------------------------
 
@@ -223,12 +465,12 @@ public partial class VideoPlayerWindow : Window
 
     private void Play_Click(object sender, RoutedEventArgs e) => TogglePlay();
     private void Stage_Click(object sender, MouseButtonEventArgs e) => TogglePlay();
-    private void Back_Click(object sender, RoutedEventArgs e) => SeekTo(Media.Position - TimeSpan.FromSeconds(5));
+    private void Back_Click(object sender, RoutedEventArgs e) => SeekTo(Position - TimeSpan.FromSeconds(5));
 
     /// <summary>Back to the start of the line on screen, or of the one before when already there.</summary>
     private void PreviousLine_Click(object sender, RoutedEventArgs e)
     {
-        var now = Media.Position;
+        var now = Position;
         var start = _lines.LastOrDefault(l => l.Start < now - TimeSpan.FromSeconds(1))?.Start ?? TimeSpan.Zero;
         SeekTo(start);
         if (!_playing) Play();
@@ -251,11 +493,12 @@ public partial class VideoPlayerWindow : Window
 
     private void Speed_Changed(object sender, SelectionChangedEventArgs e)
     {
-        if (SpeedBox.SelectedItem is ComboBoxItem { Tag: string tag } && double.TryParse(tag, System.Globalization.CultureInfo.InvariantCulture, out var speed))
-            Media.SpeedRatio = speed;
+        if (SpeedBox.SelectedItem is not ComboBoxItem { Tag: string tag } || !double.TryParse(tag, System.Globalization.CultureInfo.InvariantCulture, out var speed)) return;
+        if (_vlc is not null) _vlc.Speed = speed;
+        else Media.SpeedRatio = speed;
     }
 
-    private void SubtitleToggle_Click(object sender, RoutedEventArgs e) => ShowLine(Subtitles.LineAt(_lines, Media.Position), force: true);
+    private void SubtitleToggle_Click(object sender, RoutedEventArgs e) => ShowLine(Subtitles.LineAt(_lines, Position), force: true);
 
     private void FullScreen_Click(object sender, RoutedEventArgs e) => SetFullScreen(!_fullScreen);
 
@@ -279,15 +522,18 @@ public partial class VideoPlayerWindow : Window
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        // The arrow keys and Space belong to an open drop-down list.
+        if (AudioBox.IsDropDownOpen || SubtitleBox.IsDropDownOpen || SpeedBox.IsDropDownOpen) return;
         switch (e.Key)
         {
             case Key.Space: TogglePlay(); break;
-            case Key.Left: SeekTo(Media.Position - TimeSpan.FromSeconds(5)); break;
-            case Key.Right: SeekTo(Media.Position + TimeSpan.FromSeconds(5)); break;
+            case Key.Left: SeekTo(Position - TimeSpan.FromSeconds(5)); break;
+            case Key.Right: SeekTo(Position + TimeSpan.FromSeconds(5)); break;
             case Key.F: SetFullScreen(!_fullScreen); break;
             case Key.Escape when _fullScreen: SetFullScreen(false); break;
             case Key.R: Read_Click(this, e); break;
             case Key.C: SubtitleToggle.IsChecked = SubtitleToggle.IsChecked != true; SubtitleToggle_Click(this, e); break;
+            case Key.A: NextAudio(); break;
             default: return;
         }
         e.Handled = true;
@@ -295,10 +541,13 @@ public partial class VideoPlayerWindow : Window
 
     private void Window_Closed(object? sender, EventArgs e)
     {
+        _closed = true;
         if (!_finished) SaveProgress();
+        _install?.Cancel();
         _saveTimer.Stop();
         _tick.Stop();
         _toastTimer.Stop();
+        _vlc?.Dispose();
         Media.Close();
     }
 

@@ -142,7 +142,14 @@ public static class Transcriber
 
     private static void WriteWav(string mediaPath, string wavPath, CancellationToken cancel)
     {
-        using var reader = new MediaFoundationReader(mediaPath);
+        // Windows reads a file's first audio track; for a film with several (Japanese + English) the English one is
+        // what Whisper needs, so the file is read with the other audio tracks hidden.
+        var tracks = Matroska.IsMatroska(mediaPath) ? Matroska.ReadTracks(mediaPath) : [];
+        var english = tracks.Count(t => t.Kind == MkvTrackKind.Audio) > 1
+            ? tracks.FirstOrDefault(t => t.Kind == MkvTrackKind.Audio && t.IsEnglish) : null;
+        using WaveStream reader = english is null ? new MediaFoundationReader(mediaPath)
+            : new StreamMediaFoundationReader(new PatchedStream(
+                new FileStream(mediaPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1 << 16), Matroska.KeepAudio(mediaPath, english.Number)));
         using var resampler = new MediaFoundationResampler(reader, new WaveFormat(16000, 16, 1)) { ResamplerQuality = 60 };
         using var writer = new WaveFileWriter(wavPath, resampler.WaveFormat);
         var buffer = new byte[resampler.WaveFormat.AverageBytesPerSecond];
