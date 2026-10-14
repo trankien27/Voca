@@ -285,6 +285,52 @@ public partial class VideoView : System.Windows.Controls.UserControl
                + ". Các file .srt nằm cạnh từng video; bấm một tập để xem phụ đề hoặc phát video.");
     }
 
+    /// <summary>
+    /// "Tạo phụ đề cho thư mục…": every video of a folder the learner picks (also in its subfolders), in episode order,
+    /// goes into the list and Whisper subtitles them one after another, as when several videos are picked.
+    /// </summary>
+    private void FolderRun_Click(object sender, RoutedEventArgs e)
+    {
+        if (_work is not null) return;
+        var start = _store.Data.Settings.FilmFolder;
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "Chọn thư mục để tạo phụ đề cho mọi video trong đó",
+            InitialDirectory = _mediaPath is not null ? Path.GetDirectoryName(_mediaPath) ?? "" : Directory.Exists(start) ? start : ""
+        };
+        if (dialog.ShowDialog(_host) == true) RunFolder(dialog.FolderName);
+    }
+
+    /// <summary>Lists the videos of <paramref name="root"/> (and its subfolders) and subtitles those still without .srt.</summary>
+    private void RunFolder(string root)
+    {
+        string[] files;
+        try
+        {
+            files = Directory.GetFiles(root, "*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.Hidden | FileAttributes.System });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Status($"Không đọc được thư mục: {ex.Message}"); return; }
+        var videos = files.Where(f => WatchProgress.MediaExtensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
+            .OrderBy(Path.GetDirectoryName, WatchProgress.EpisodeOrder).ThenBy(f => f, WatchProgress.EpisodeOrder).ToList();
+        if (videos.Count == 0) { Status($"{root} không có video hay file âm thanh nào."); return; }
+
+        _filmsLoading = true;
+        FilmBox.SelectedIndex = -1;
+        _filmsLoading = false;
+        _queue.Clear();
+        foreach (var video in videos) _queue.Add(new QueueItem(video, Path.GetRelativePath(root, video)));
+        ShowQueueStates();
+        QueuePanel.Visibility = Visibility.Visible;
+        if (Pending.Count == 0)
+        {
+            Status($"{root}: {videos.Count} video, video nào cũng đã có phụ đề. Tích “Tạo lại cả video đã có phụ đề” rồi bấm “Tạo phụ đề” nếu muốn tạo lại.");
+            UpdateButtons();
+            return;
+        }
+        Status($"{root}: {videos.Count} video, {Pending.Count} video sẽ được tạo phụ đề lần lượt — bấm “Hủy” để dừng, lần sau chọn lại thư mục thì làm tiếp phần còn thiếu.");
+        Run_Click(this, new RoutedEventArgs());
+    }
+
     private void FilmFolder_Click(object sender, RoutedEventArgs e)
     {
         if (PickFilmFolder(_host, _store) is null) return;
@@ -708,7 +754,7 @@ public partial class VideoView : System.Windows.Controls.UserControl
         var busy = _work is not null;
         var isMedia = _mediaPath is not null && !_mediaPath.EndsWith(".srt", StringComparison.OrdinalIgnoreCase);
         RunButton.IsEnabled = !busy && (_queue.Count > 0 || isMedia);
-        ScanFilmsButton.IsEnabled = ExtractButton.IsEnabled = !busy;
+        ScanFilmsButton.IsEnabled = ExtractButton.IsEnabled = FolderRunButton.IsEnabled = !busy;
         PlayVideoButton.IsEnabled = _videoPath is not null && !busy && _lines.Count > 0;
         ReadButton.IsEnabled = !busy;
         SaveButton.IsEnabled = isMedia && !busy && _lines.Count > 0;
