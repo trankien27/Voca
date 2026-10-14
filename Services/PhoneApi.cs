@@ -432,6 +432,14 @@ public sealed class PhoneApi(Store store, Func<DateTime>? clock = null)
         return _videos.TryGetValue(id, out var video) ? video : throw new KeyNotFoundException();
     }
 
+    /// <summary>The video with its subtitles: an .mkv without an .srt gets one from the English subtitles inside it.</summary>
+    private PhoneVideo FindWithSubtitles(string id)
+    {
+        var video = FindVideo(id);
+        if (video.Srt is not null || Matroska.EnsureSrt(video.Path) is not { } srt) return video;
+        return _videos[id] = video with { Srt = srt };
+    }
+
     private static string Name(string path) => Path.GetFileNameWithoutExtension(path);
 
     private static string Clock(double seconds)
@@ -515,7 +523,7 @@ public sealed class PhoneApi(Store store, Func<DateTime>? clock = null)
     /// <summary>One video to play: its subtitles with each word marked as on the computer, where to start and what comes next.</summary>
     private object Video(string id)
     {
-        var video = FindVideo(id);
+        var video = FindWithSubtitles(id);
         var lines = ReadLines(video);
         var marker = new WordMarker(Data, Subtitles.NewWords(Data, lines));
         var nextVideo = NextOf(video);
@@ -553,7 +561,7 @@ public sealed class PhoneApi(Store store, Func<DateTime>? clock = null)
     {
         var name = request.Path["/media/".Length..];
         if (name.EndsWith(".vtt"))
-            return PhoneResponse.Text(200, "text/vtt; charset=utf-8", PhoneVideos.ToVtt(ReadLines(FindVideo(name[..^4]))));
+            return PhoneResponse.Text(200, "text/vtt; charset=utf-8", PhoneVideos.ToVtt(ReadLines(FindWithSubtitles(name[..^4]))));
         var video = FindVideo(name);
         long size;
         try { size = new FileInfo(video.Path).Length; }

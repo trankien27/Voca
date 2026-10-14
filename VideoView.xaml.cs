@@ -191,6 +191,100 @@ public partial class VideoView : System.Windows.Controls.UserControl
         Run_Click(sender, e);
     }
 
+    /// <summary>
+    /// "Tách phụ đề từ mkv": the English subtitles inside the .mkv files are written as their .srt, one after another,
+    /// with each one's state in the list — the episodes listed (a film, or videos picked), or with nothing listed every
+    /// episode of the film folder. Videos with an .srt are skipped unless "Tạo lại" is ticked; a video without English
+    /// text subtitles inside is marked and skipped (Tạo phụ đề recognises its speech instead). No model is needed.
+    /// </summary>
+    private async void ExtractMkv_Click(object sender, RoutedEventArgs e)
+    {
+        if (_work is not null) return;
+        if (_queue.Count == 0)
+        {
+            var episodes = PhoneVideos.List(_store.Data, WatchProgress.Load(_store.Folder)).Where(v => v.Film is not null).ToList();
+            if (episodes.Count == 0)
+            {
+                Status(_store.Data.Settings.FilmFolder.Length == 0
+                    ? "Chọn một phim hoặc video trước, hoặc chọn thư mục phim (“Thư mục phim…”) để tách cả thư mục."
+                    : "Thư mục phim chưa có phim nào (mỗi phim là một thư mục con).");
+                return;
+            }
+            foreach (var episode in episodes)
+                _queue.Add(new QueueItem(episode.Path, episode.Film == episode.Label ? episode.Film : $"{episode.Film} · {episode.Label}"));
+            ShowQueueStates();
+            QueuePanel.Visibility = Visibility.Visible;
+        }
+        var redo = RedoBox.IsChecked == true;
+        var todo = _queue.Where(i => Matroska.IsMatroska(i.Path) && (redo || !i.HasSubtitles)).ToList();
+        if (todo.Count == 0)
+        {
+            Status(_queue.Any(i => Matroska.IsMatroska(i.Path))
+                ? "Mọi file mkv trong danh sách đều đã có phụ đề .srt. Tích “Tạo lại cả video đã có phụ đề” để tách lại."
+                : "Danh sách không có file mkv nào.");
+            return;
+        }
+
+        _work = new CancellationTokenSource();
+        var cancel = _work.Token;
+        SetBusy(true);
+        var started = DateTime.Now;
+        int done = 0, none = 0, failed = 0;
+        try
+        {
+            for (var n = 0; n < todo.Count; n++)
+            {
+                var item = todo[n];
+                QueueList.SelectedItem = item;
+                QueueList.ScrollIntoView(item);
+                Progress.Value = n * 100.0 / todo.Count;
+                StageText.Text = $"Đang tách phụ đề {n + 1}/{todo.Count}: {item.Name}";
+                item.Set("Đang tách…", WorkInk);
+                try
+                {
+                    var track = await Task.Run(() => EmbeddedEnglish(item.Path), cancel);
+                    if (track is null)
+                    {
+                        item.Set("Không có phụ đề tiếng Anh trong video", MutedInk);
+                        none++;
+                        continue;
+                    }
+                    var lines = await ReadEmbeddedAsync(item.Path, track, cancel);
+                    if (lines.Count == 0)
+                    {
+                        item.Set("Phụ đề trong video không có lời thoại", MutedInk);
+                        none++;
+                        continue;
+                    }
+                    File.WriteAllText(SrtPathFor(item.Path), Subtitles.ToSrt(lines), new System.Text.UTF8Encoding(false));
+                    item.Set($"Xong · {lines.Count} dòng", DoneInk);
+                    done++;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+                {
+                    item.Set("Lỗi: " + ex.Message, ErrorInk);
+                    failed++;
+                }
+            }
+            Progress.Value = 100;
+            StageText.Text = $"Xong trong {Took(started)}.";
+        }
+        catch (OperationCanceledException)
+        {
+            StageText.Text = "Đã hủy.";
+        }
+        finally
+        {
+            _work.Dispose();
+            _work = null;
+            SetBusy(false);
+        }
+        Status($"Đã tách phụ đề cho {done}/{todo.Count} video"
+               + (none > 0 ? $", {none} video không có phụ đề tiếng Anh bên trong (dùng “Tạo phụ đề” để nhận dạng giọng nói)" : "")
+               + (failed > 0 ? $", {failed} video lỗi (xem dòng màu đỏ)" : "")
+               + ". Các file .srt nằm cạnh từng video; bấm một tập để xem phụ đề hoặc phát video.");
+    }
+
     private void FilmFolder_Click(object sender, RoutedEventArgs e)
     {
         if (PickFilmFolder(_host, _store) is null) return;
@@ -669,7 +763,7 @@ public partial class VideoView : System.Windows.Controls.UserControl
         var busy = _work is not null;
         var isMedia = _mediaPath is not null && !_mediaPath.EndsWith(".srt", StringComparison.OrdinalIgnoreCase);
         RunButton.IsEnabled = !busy && (_queue.Count > 0 || isMedia);
-        ScanFilmsButton.IsEnabled = !busy;
+        ScanFilmsButton.IsEnabled = ExtractButton.IsEnabled = !busy;
         PlayVideoButton.IsEnabled = _videoPath is not null && !busy && _lines.Count > 0;
         ReadButton.IsEnabled = !busy;
         SaveButton.IsEnabled = isMedia && !busy && _lines.Count > 0;

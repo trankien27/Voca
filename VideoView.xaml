@@ -41,6 +41,8 @@
                             <Button x:Name="ScanFilmsButton" Content="Tạo phụ đề cả thư mục" local:UiIcon.Symbol="ClosedCaption24"
                                     Click="ScanFilms_Click" Background="{StaticResource Accent}" Foreground="White"
                                     ToolTip="Quét mọi phim trong thư mục phim và tạo lần lượt phụ đề cho mọi tập chưa có (từng tập một, bấm Hủy để dừng)"/>
+                            <Button x:Name="ExtractButton" Content="Tách phụ đề từ mkv" local:UiIcon.Symbol="DocumentText24" Click="ExtractMkv_Click"
+                                    ToolTip="Tách phụ đề tiếng Anh có sẵn trong các file mkv thành .srt (nhanh, không cần Whisper): các tập trong danh sách bên dưới, hoặc cả thư mục phim khi danh sách trống. Tích “Tạo lại” để ghi đè .srt đã có."/>
                             <Button Content="Thư mục phim…" local:UiIcon.Symbol="FolderOpen24" Click="FilmFolder_Click"
                                     ToolTip="Chọn thư mục chứa các phim: mỗi thư mục con là một phim, tên thư mục là tên phim"/>
                         </WrapPanel>

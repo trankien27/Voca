@@ -1170,6 +1170,13 @@ using (var mkStream = new PatchedStream(File.OpenRead(mkFile), mkPatches))
     Check(mkRead.SequenceEqual(mkBytes) && !File.ReadAllBytes(mkFile).SequenceEqual(mkBytes),
         "mkv: the file is read with the bytes changed, the file itself untouched");
 }
+var mkSrt = Path.ChangeExtension(mkFile, ".srt");
+var mkEnsured = Matroska.EnsureSrt(mkFile);
+File.WriteAllText(mkSrt, "kept");
+Check(mkEnsured == mkSrt && Matroska.EnsureSrt(mkFile) == mkSrt && File.ReadAllText(mkSrt) == "kept"
+      && Matroska.EnsureSrt(Path.Combine(Path.GetTempPath(), "voca-no-subtitles-" + Guid.NewGuid().ToString("N") + ".mp4")) is null,
+    "mkv: an .mkv without .srt gets one from its English subtitles; an existing .srt is left alone");
+File.Delete(mkSrt);
 File.Delete(mkFile);
 File.Delete(mkPatched);
 
