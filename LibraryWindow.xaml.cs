@@ -52,7 +52,8 @@ public partial class LibraryWindow : Wpf.Ui.Controls.FluentWindow
             if (e.Source == Tabs && Tabs.SelectedItem == SettingsTab && !_versionsLoaded) _ = LoadVersionsAsync();
         };
         _store.Changed += OnStoreChanged;
-        Closed += (_, _) => _store.Changed -= OnStoreChanged;
+        _actions.Phone.StatusChanged += RenderPhone;
+        Closed += (_, _) => { _store.Changed -= OnStoreChanged; _actions.Phone.StatusChanged -= RenderPhone; };
 
         RefreshCourse();
         RefreshPlanBox(select: CourseEngine.Current(Data)?.Plan);
@@ -639,6 +640,7 @@ public partial class LibraryWindow : Wpf.Ui.Controls.FluentWindow
         QuizTypingBox.IsChecked = s.QuizTyping;
         DailyCheckBox.IsChecked = s.CheckUpdatesDaily;
         LoadPillStyle(s.Pill);
+        LoadPhone();
         VersionText.Text = $"Đang dùng: Voca {Updater.Current.ToString(3)}";
         DataPathText.Text =$"Toàn bộ dữ liệu (lộ trình, tiến độ, cài đặt) nằm trong {Path.Combine(_store.Folder, "voca.json")}. Mỗi lần lưu giữ một bản .bak.";
     }
@@ -670,6 +672,148 @@ public partial class LibraryWindow : Wpf.Ui.Controls.FluentWindow
             d.Settings.QuizTyping = QuizTypingBox.IsChecked == true;
         });
         Status($"Đã lưu cài đặt lúc {DateTime.Now:HH:mm:ss}.");
+    }
+
+    // ---- phone ----
+
+    private sealed record PhoneAddress(string Address, string Adapter)
+    {
+        public override string ToString() => $"{Address}   ·   {Adapter}";
+    }
+
+    private bool _phoneLoading;
+
+    /// <summary>Fills the phone panel; the addresses are looked up again each time (Wi-Fi may have changed).</summary>
+    private void LoadPhone()
+    {
+        _phoneLoading = true;
+        PhoneAccessBox.IsChecked = Data.Settings.PhoneAccess;
+        PhonePortBox.Text = Data.Settings.PhonePort.ToString();
+        var selected = (PhoneAddressBox.SelectedItem as PhoneAddress)?.Address;
+        var addresses = PhoneAccess.Addresses().Select(a => new PhoneAddress(a.Address, a.Adapter)).ToList();
+        PhoneAddressBox.ItemsSource = addresses;
+        PhoneAddressBox.SelectedItem = addresses.FirstOrDefault(a => a.Address == selected) ?? addresses.FirstOrDefault();
+        PhoneFoldersList.ItemsSource = Data.Settings.PhoneVideoFolders.ToList();
+        FilmFolderBox.Text = Data.Settings.FilmFolder.Length > 0 ? Data.Settings.FilmFolder : "Chưa chọn";
+        _phoneLoading = false;
+        RenderPhone();
+    }
+
+    private void RenderPhone()
+    {
+        var phone = _actions.Phone;
+        var on = Data.Settings.PhoneAccess;
+        PhoneDetails.Visibility = PhoneVideoPanel.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        if (!on) return;
+        PhoneStatusText.ClearValue(TextBlock.ForegroundProperty);
+        if (PhoneAddressBox.SelectedItem is not PhoneAddress address)
+        {
+            PhoneQr.Source = null;
+            PhoneLinkBox.Text = "";
+            PhoneStatusText.Text = "Máy tính chưa kết nối mạng nào. Kết nối Wi-Fi rồi mở lại tab này.";
+            return;
+        }
+        var link = phone.Link(address.Address);
+        PhoneLinkBox.Text = link;
+        PhoneQr.Source = Png(PhoneAccess.QrPng(link));
+        if (phone.Error is { } error)
+        {
+            PhoneStatusText.Foreground = WarnInk;
+            PhoneStatusText.Text = error;
+        }
+        else
+        {
+            PhoneStatusText.Text = $"Đang mở ở cổng {phone.Port}. Lần đầu Windows có thể hỏi về tường lửa: chọn Cho phép trên mạng riêng (Private). " +
+                                   "Không mở được trên điện thoại thì xem Wi-Fi của máy tính có đang đặt là mạng riêng không.";
+        }
+    }
+
+    private static System.Windows.Media.Imaging.BitmapImage Png(byte[] bytes)
+    {
+        var image = new System.Windows.Media.Imaging.BitmapImage();
+        image.BeginInit();
+        image.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+        image.StreamSource = new MemoryStream(bytes);
+        image.EndInit();
+        image.Freeze();
+        return image;
+    }
+
+    private void PhoneAccess_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_phoneLoading) return;
+        var on = PhoneAccessBox.IsChecked == true;
+        _store.Update(d =>
+        {
+            d.Settings.PhoneAccess = on;
+            if (on && d.Settings.PhoneKey.Length == 0) d.Settings.PhoneKey = PhoneAccess.NewKey();
+        });
+        LoadPhone();
+        Status(on ? "Đã bật học trên điện thoại. Quét mã QR để mở." : "Đã tắt học trên điện thoại.");
+    }
+
+    private void PhoneAddress_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_phoneLoading) RenderPhone();
+    }
+
+    private void CopyPhoneLink_Click(object sender, RoutedEventArgs e)
+    {
+        if (PhoneLinkBox.Text.Length == 0) return;
+        try
+        {
+            System.Windows.Clipboard.SetText(PhoneLinkBox.Text);
+            Status("Đã sao chép link. Gửi sang điện thoại (Zalo, email…) rồi mở bằng trình duyệt — link này chỉ dành cho bạn.");
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            Status("Không sao chép được, clipboard đang bận. Thử lại.");
+        }
+    }
+
+    private void NewPhoneKey_Click(object sender, RoutedEventArgs e)
+    {
+        _store.Update(d => d.Settings.PhoneKey = PhoneAccess.NewKey());
+        RenderPhone();
+        Status("Đã đổi mã kết nối: điện thoại đã kết nối trước đây bị ngắt, hãy quét mã QR mới.");
+    }
+
+    private void PickFilmFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (VideoView.PickFilmFolder(this, _store) is not { } folder) return;
+        FilmFolderBox.Text = folder;
+        Status($"Thư mục phim: {folder}. Phim hiện ở tab Phụ đề video và tab Video trên điện thoại.");
+    }
+
+    private void AddPhoneFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "Chọn thư mục chứa video để xem trên điện thoại" };
+        if (dialog.ShowDialog(this) != true) return;
+        var folder = dialog.FolderName;
+        if (Data.Settings.PhoneVideoFolders.Any(f => string.Equals(f, folder, StringComparison.OrdinalIgnoreCase))) return;
+        _store.Update(d => d.Settings.PhoneVideoFolders.Add(folder));
+        PhoneFoldersList.ItemsSource = Data.Settings.PhoneVideoFolders.ToList();
+        Status($"Điện thoại sẽ thấy các video trong {folder}.");
+    }
+
+    private void RemovePhoneFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (PhoneFoldersList.SelectedItem is not string folder) { Status("Chọn một thư mục trong danh sách trước."); return; }
+        _store.Update(d => d.Settings.PhoneVideoFolders.RemoveAll(f => string.Equals(f, folder, StringComparison.OrdinalIgnoreCase)));
+        PhoneFoldersList.ItemsSource = Data.Settings.PhoneVideoFolders.ToList();
+        Status($"Đã bỏ {folder} khỏi danh sách video của điện thoại (thư mục bạn đã xem trên máy tính vẫn hiện).");
+    }
+
+    private void PhonePort_Click(object sender, RoutedEventArgs e)
+    {
+        if (!int.TryParse(PhonePortBox.Text, out var port) || port is < 1024 or > 65535)
+        {
+            Status("Cổng phải là số từ 1024 đến 65535.");
+            return;
+        }
+        _store.Update(d => d.Settings.PhonePort = port);
+        RenderPhone();
+        Status($"Đã chuyển sang cổng {port}. Điện thoại cần quét mã QR mới.");
     }
 
     // ---- look of the taskbar word ----

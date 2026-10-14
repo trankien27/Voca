@@ -439,6 +439,60 @@
                                         HorizontalAlignment="Left" Margin="0,10,0,0"/>
                             </Grid>
                         </Border>
+                        <Border x:Name="FilmPanel" Style="{StaticResource Panel}" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource H}" Text="Phim"/>
+                                <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,6"
+                                           Text="Thư mục phim: mỗi thư mục con là một phim, tên thư mục là tên phim; bên trong là các tập (video kèm file .srt cùng tên thì có phụ đề). Phim hiện ở tab Phụ đề video (có nút tạo phụ đề cho mọi tập còn thiếu) và tab Video trên điện thoại. Điện thoại phát tốt nhất là mp4 (H.264); mkv, avi có thể không phát được."/>
+                                <DockPanel Margin="0,0,0,10">
+                                    <Button DockPanel.Dock="Right" Content="Chọn thư mục phim…" local:UiIcon.Symbol="FolderOpen24" Click="PickFilmFolder_Click" Margin="6,0,0,0"/>
+                                    <TextBox x:Name="FilmFolderBox" IsReadOnly="True" VerticalAlignment="Center"/>
+                                </DockPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border x:Name="PhonePanel" Style="{StaticResource Panel}" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource H}" Text="Học trên điện thoại"/>
+                                <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,8"
+                                           Text="Voca mở một trang web nhỏ để điện thoại học trên cùng dữ liệu của máy này: từ hôm nay, Đã thuộc / Chưa nhớ, phiên học, tra từ và thêm từ. Điện thoại cần cùng mạng Wi-Fi với máy tính (hoặc cài Tailscale trên cả hai để dùng khi ra ngoài), và Voca trên máy tính phải đang chạy."/>
+                                <CheckBox x:Name="PhoneAccessBox" Content="Cho phép điện thoại kết nối" Checked="PhoneAccess_Changed" Unchecked="PhoneAccess_Changed"/>
+                                <Grid x:Name="PhoneDetails" Margin="0,10,0,0">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                    <Border Background="White" CornerRadius="8" Padding="6" BorderBrush="#E6E3F5" BorderThickness="1" VerticalAlignment="Top">
+                                        <Image x:Name="PhoneQr" Width="176" Height="176" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Margin="16,0,0,0">
+                                        <TextBlock Text="Quét mã QR bằng camera điện thoại để mở Voca. Mở xong, thêm trang vào màn hình chính để lần sau mở như một ứng dụng."
+                                                   Style="{StaticResource Hint}" Margin="0,0,0,8"/>
+                                        <TextBlock Text="Địa chỉ của máy tính" Foreground="{StaticResource Ink}" Margin="0,0,0,4"/>
+                                        <ComboBox x:Name="PhoneAddressBox" HorizontalAlignment="Left" MinWidth="300" SelectionChanged="PhoneAddress_Changed"
+                                                  ToolTip="Chọn địa chỉ cùng mạng với điện thoại (thường là Wi-Fi). Địa chỉ Tailscale dùng được cả khi ra ngoài."/>
+                                        <TextBox x:Name="PhoneLinkBox" IsReadOnly="True" Margin="0,8,0,0" FontSize="12"/>
+                                        <WrapPanel Margin="-3,8,0,0">
+                                            <Button Content="Sao chép link" local:UiIcon.Symbol="Copy24" Click="CopyPhoneLink_Click"/>
+                                            <Button Content="Đổi mã kết nối" local:UiIcon.Symbol="KeyReset24" Click="NewPhoneKey_Click"
+                                                    ToolTip="Điện thoại đã kết nối sẽ bị ngắt và phải quét mã QR mới."/>
+                                        </WrapPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                            <TextBlock Text="Cổng" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <TextBox x:Name="PhonePortBox" Width="80" VerticalAlignment="Center"/>
+                                            <Button Content="Đổi cổng" Click="PhonePort_Click" Margin="6,0,0,0"/>
+                                        </StackPanel>
+                                        <TextBlock x:Name="PhoneStatusText" Style="{StaticResource Hint}" Margin="2,8,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+                                <StackPanel x:Name="PhoneVideoPanel" Margin="0,14,0,0">
+                                    <TextBlock Text="Thư mục video khác" Foreground="{StaticResource Ink}" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                    <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,6"
+                                               Text="Ngoài thư mục phim, điện thoại còn thấy video trong các thư mục bạn đã xem hoặc tạo bộ từ trên máy này, và các thư mục thêm ở đây."/>
+                                    <ListBox x:Name="PhoneFoldersList" MaxHeight="120" BorderBrush="#E6E3F5" ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
+                                    <WrapPanel Margin="-3,6,0,0">
+                                        <Button Content="Thêm thư mục video…" local:UiIcon.Symbol="FolderAdd24" Click="AddPhoneFolder_Click"/>
+                                        <Button Content="Bỏ thư mục đã chọn" local:UiIcon.Symbol="Delete24" Click="RemovePhoneFolder_Click"/>
+                                    </WrapPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
                         <Border Style="{StaticResource Panel}" Margin="0,0,0,10">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource H}" Text="Chữ trên taskbar"/>

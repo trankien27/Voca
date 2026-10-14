@@ -12,7 +12,8 @@ public sealed record AppActions(
     Action OpenStats,
     Action OpenMistakes,
     Action<IReadOnlyList<Word>, string, SessionMode> Practice,
-    Func<bool> QuickAddHotkeyReady);
+    Func<bool> QuickAddHotkeyReady,
+    Services.PhoneAccess Phone);
 
 /// <summary>What a session is for; changes the labels and the closing note, not the steps.</summary>
 public enum SessionMode { Course, MistakeDay, Practice, NewWords }

@@ -1,0 +1,883 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#6C5CE7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Voca">
+<title>Voca</title>
+<style>
+:root {
+  --bg: #F6F5FB; --card: #FFFFFF; --ink: #172033; --muted: #667085; --line: #E6E3F5;
+  --accent: #6C5CE7; --accent-ink: #4B3CC4; --accent-wash: #EEECFF;
+  --good: #067647; --good-wash: #E7F7EE; --bad: #B42318; --bad-wash: #FDECEA;
+  --warn-wash: #FFF4E5; --warn: #B54708; --new-wash: #EEF4FF; --new: #3538CD;
+  --shadow: 0 1px 2px rgba(23,32,51,.06), 0 4px 16px rgba(23,32,51,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12131A; --card: #1C1E29; --ink: #ECEDF3; --muted: #9A9FB5; --line: #2C2F3E;
+    --accent: #8B7EF0; --accent-ink: #B7AEFF; --accent-wash: #2A2650;
+    --good: #4ADE9B; --good-wash: #12352A; --bad: #FF8A80; --bad-wash: #3D1C1C;
+    --warn-wash: #3A2A14; --warn: #FFB357; --new-wash: #1E2547; --new: #A9B4FF;
+    --shadow: none;
+  }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); }
+body { font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+input, textarea { font: inherit; color: var(--ink); }
+header { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px;
+  padding: calc(10px + env(safe-area-inset-top)) 16px 10px; background: var(--bg); }
+header h1 { margin: 0; font-size: 20px; color: var(--accent); letter-spacing: -.01em; flex: 1; }
+.chip { font-size: 13px; padding: 3px 10px; border-radius: 99px; background: var(--card); box-shadow: var(--shadow); border: 1px solid var(--line); }
+main { padding: 0 16px; max-width: 560px; margin: 0 auto; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; box-shadow: var(--shadow); margin-bottom: 12px; }
+.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .04em; color: var(--accent-ink); text-transform: uppercase; }
+.muted { color: var(--muted); font-size: 14px; }
+.dots { display: flex; gap: 4px; margin: 10px 0; }
+.dots i { flex: 1; height: 6px; border-radius: 3px; background: var(--line); }
+.dots i.done { background: var(--good); } .dots i.now { background: var(--accent); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 46px; padding: 10px 16px;
+  border-radius: 12px; font-weight: 600; background: var(--accent-wash); color: var(--accent-ink); }
+.btn.primary { background: var(--accent); color: #fff; }
+.btn.good { background: var(--good-wash); color: var(--good); }
+.btn.bad { background: var(--bad-wash); color: var(--bad); }
+.btn.block { width: 100%; }
+.btn:disabled { opacity: .45; }
+.row { display: flex; gap: 8px; } .row > * { flex: 1; }
+.badge { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .03em; padding: 3px 8px; border-radius: 6px; background: var(--new-wash); color: var(--new); }
+.badge.review { background: var(--warn-wash); color: var(--warn); } .badge.mistake { background: var(--bad-wash); color: var(--bad); }
+.word { font-size: 34px; font-weight: 700; letter-spacing: -.01em; margin: 8px 0 0; word-break: break-word; }
+.word-line { display: flex; align-items: flex-start; gap: 8px; }
+.word-line .word { flex: 1; }
+.speak { width: 46px; height: 46px; border-radius: 50%; background: var(--accent-wash); color: var(--accent-ink); font-size: 20px; flex: none; margin-top: 6px; }
+.phon { color: var(--muted); }
+.example { font-style: italic; margin-top: 10px; }
+.flip { margin-top: 14px; border: 1.5px dashed var(--accent); border-radius: 14px; padding: 16px; text-align: center; min-height: 86px;
+  display: flex; flex-direction: column; justify-content: center; background: var(--accent-wash); width: 100%; }
+.flip.open { border-style: solid; text-align: left; background: var(--card); }
+.flip .meaning { font-size: 20px; font-weight: 600; }
+.flip .ex-vi { color: var(--muted); margin-top: 6px; font-size: 15px; }
+.counter { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.counter > div { flex: 1; min-width: 0; }
+.counter .badge { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+.nav { width: 44px; height: 44px; border-radius: 12px; background: var(--accent-wash); color: var(--accent-ink); font-size: 22px; }
+.nav:disabled { opacity: .35; }
+.info { font-size: 13px; color: var(--muted); margin-top: 10px; }
+.empty { text-align: center; padding: 28px 12px; }
+.empty .big { font-size: 42px; }
+nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: flex; background: var(--card); border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom); }
+nav.tabs button { flex: 1; padding: 8px 0 10px; font-size: 12px; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 2px; }
+nav.tabs button span { font-size: 22px; line-height: 1; }
+nav.tabs button.on { color: var(--accent); font-weight: 600; }
+.toast { position: fixed; left: 12px; right: 12px; bottom: calc(80px + env(safe-area-inset-bottom)); z-index: 20; max-width: 536px; margin: 0 auto;
+  background: #1E2130; color: #fff; border-radius: 12px; padding: 12px 14px; display: flex; gap: 10px; align-items: center; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+.toast p { margin: 0; flex: 1; font-size: 14px; }
+.toast button { color: #C9C2FF; font-weight: 700; padding: 6px; }
+.banner { background: var(--bad-wash); color: var(--bad); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; font-size: 14px; }
+.banner button { color: var(--bad); font-weight: 700; text-decoration: underline; padding: 0; }
+input.field, textarea.field { width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); outline: none; }
+input.field:focus, textarea.field:focus { border-color: var(--accent); }
+label.lbl { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin: 12px 0 4px; }
+.filters { display: flex; gap: 6px; overflow-x: auto; padding: 10px 0; scrollbar-width: none; }
+.filters button { white-space: nowrap; padding: 7px 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--card); font-size: 14px; }
+.filters button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.list { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.item { padding: 12px 14px; border-bottom: 1px solid var(--line); width: 100%; text-align: left; display: block; }
+.item:last-child { border-bottom: 0; }
+.item .top { display: flex; align-items: baseline; gap: 8px; }
+.item .t { font-weight: 700; flex: 1; }
+.item .m { color: var(--muted); font-size: 14px; }
+.st { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: var(--line); color: var(--muted); white-space: nowrap; }
+.st.learned, .st.mastered { background: var(--good-wash); color: var(--good); }
+.st.due { background: var(--warn-wash); color: var(--warn); }
+.st.learning { background: var(--accent-wash); color: var(--accent-ink); }
+.detail { margin-top: 8px; font-size: 14px; }
+/* session */
+.sheet { position: fixed; inset: 0; z-index: 10; background: var(--bg); overflow-y: auto; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+.sheet header { background: var(--bg); }
+.close { width: 40px; height: 40px; border-radius: 50%; background: var(--card); border: 1px solid var(--line); font-size: 18px; }
+.stages { display: flex; gap: 6px; margin-bottom: 12px; }
+.stages span { flex: 1; text-align: center; font-size: 13px; padding: 6px 4px; border-radius: 99px; color: var(--muted); }
+.stages span.on { background: var(--accent-wash); color: var(--accent-ink); font-weight: 600; }
+.stages span.past { color: var(--good); }
+.prompt { font-size: 24px; font-weight: 700; margin: 6px 0 14px; word-break: break-word; }
+.prompt.cloze { font-size: 19px; font-weight: 600; }
+.prompt.meaning-q { font-family: Georgia, serif; font-size: 28px; }
+.option { display: block; width: 100%; text-align: left; padding: 14px; margin-bottom: 8px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card); min-height: 52px; }
+.option.right { border-color: var(--good); background: var(--good-wash); color: var(--good); font-weight: 700; }
+.option.wrong { border-color: var(--bad); background: var(--bad-wash); color: var(--bad); }
+.feedback { margin: 10px 0; font-weight: 600; }
+.feedback.ok { color: var(--good); } .feedback.no { color: var(--bad); }
+.score { font-size: 48px; font-weight: 800; color: var(--accent); text-align: center; }
+.result { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.result:last-child { border-bottom: 0; }
+.result .mk { font-weight: 800; width: 18px; }
+.result .mk.ok { color: var(--good); } .result .mk.no { color: var(--bad); }
+.result .body { flex: 1; min-width: 0; }
+.result .body .m { color: var(--muted); font-size: 13px; }
+.result label { font-size: 13px; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.result input { width: 20px; height: 20px; accent-color: var(--good); }
+.spacer { height: 10px; }
+/* videos */
+.vcont { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: var(--accent); color: #fff; }
+.vcont .play { width: 46px; height: 46px; border-radius: 50%; background: rgba(255,255,255,.2); display: grid; place-items: center; font-size: 20px; flex: none; }
+.vcont .t { font-weight: 700; word-break: break-word; } .vcont .s { font-size: 14px; opacity: .85; }
+.folder { font-size: 13px; font-weight: 700; color: var(--muted); margin: 16px 2px 6px; word-break: break-all; }
+.video-item .t { word-break: break-word; }
+.video-item .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.bar { height: 3px; border-radius: 2px; background: var(--line); margin-top: 8px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+#player { position: fixed; inset: 0; z-index: 12; background: #000; color: #fff; display: flex; flex-direction: column; overflow: hidden; }
+#player > * { flex: none; }
+#player .top { display: flex; align-items: center; gap: 10px; padding: calc(8px + env(safe-area-inset-top)) 12px 8px; background: #000; }
+#player .top .name { flex: 1; min-width: 0; font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#player .top button { width: 40px; height: 40px; border-radius: 50%; background: #222; color: #fff; font-size: 18px; flex: none; }
+.stage { position: relative; background: #000; }
+.stage video { display: block; width: 100%; max-height: 60vh; background: #000; }
+.sub { min-height: 96px; padding: 12px 16px; font-size: 21px; line-height: 1.45; text-align: center; background: #111; color: #fff; }
+.sub.empty { color: #888; font-size: 15px; display: flex; align-items: center; justify-content: center; }
+.w-new { color: #FFC94D; font-weight: 700; } .w-learning { color: #B9AEFF; font-weight: 700; } .w-waiting { color: #7EE2A8; font-weight: 700; }
+.w-new, .w-learning, .w-waiting { cursor: pointer; border-bottom: 1px dashed currentColor; }
+.tools { display: flex; gap: 8px; padding: 10px 12px; background: #000; overflow-x: auto; scrollbar-width: none; }
+.tools button, .tools select { flex: none; min-height: 40px; padding: 8px 12px; border-radius: 10px; background: #1E2130; color: #fff; border: 0; font: inherit; font-size: 14px; }
+.tools button.on { background: #6C5CE7; }
+.next-ep { margin: 0 12px 10px; width: calc(100% - 24px); background: #6C5CE7; color: #fff; }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 0 16px 8px; font-size: 12px; color: #9A9FB5; }
+#player > .transcript { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0 calc(16px + env(safe-area-inset-bottom)); background: #000; }
+.tline { display: flex; gap: 10px; padding: 8px 16px; font-size: 16px; color: #C9CCD8; }
+.tline .at { flex: none; width: 44px; font-size: 12px; color: #777; padding-top: 3px; font-variant-numeric: tabular-nums; }
+.tline.now { background: #1A1C27; color: #fff; }
+.pop { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--card); color: var(--ink); border-radius: 18px 18px 0 0;
+  padding: 18px 16px calc(16px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 30px rgba(0,0,0,.35); max-width: 560px; margin: 0 auto; }
+.pop .word { font-size: 28px; margin: 0; }
+@media (orientation: landscape) and (max-height: 600px) {
+  #player { display: block; overflow-y: auto; }
+  #player > .transcript { overflow: visible; }
+  #player .top { position: absolute; top: 0; left: 0; right: 0; z-index: 2; background: linear-gradient(#000c, #0000); }
+  .stage { height: 100vh; height: 100dvh; }
+  .stage video { width: 100%; height: 100%; max-height: none; object-fit: contain; }
+  .stage .sub { position: absolute; left: 8%; right: 8%; bottom: 56px; min-height: 0; background: rgba(0,0,0,.6); border-radius: 10px; padding: 6px 12px; font-size: 20px; }
+  .stage .sub.empty { display: none; }
+}
+.stage:fullscreen { display: flex; flex-direction: column; justify-content: center; }
+.stage:fullscreen video { max-height: none; height: 100%; object-fit: contain; }
+.stage:fullscreen .sub { position: absolute; left: 6%; right: 6%; bottom: 64px; min-height: 0; background: rgba(0,0,0,.6); border-radius: 10px; padding: 6px 12px; font-size: 24px; }
+.stage:fullscreen .sub.empty { display: none; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Voca</h1>
+  <span class="chip" id="streak" hidden></span>
+</header>
+<main>
+  <div id="offline" class="banner" hidden>
+    Không kết nối được với máy tính. Voca trên máy tính có đang chạy, và điện thoại có cùng mạng Wi-Fi không?
+    <button id="retry">Thử lại</button>
+  </div>
+  <section id="view-today"></section>
+  <section id="view-words" hidden></section>
+  <section id="view-video" hidden></section>
+  <section id="view-add" hidden></section>
+</main>
+<nav class="tabs">
+  <button data-view="today" class="on"><span>☀︎</span>Hôm nay</button>
+  <button data-view="video"><span>▶︎</span>Video</button>
+  <button data-view="words"><span>☰</span>Từ vựng</button>
+  <button data-view="add"><span>＋</span>Thêm từ</button>
+</nav>
+<div id="toast" class="toast" hidden><p></p><button hidden>Hoàn tác</button></div>
+<div id="session" class="sheet" hidden></div>
+<div id="player" hidden></div>
+<div id="word-pop" class="pop" hidden></div>
+
+<script>
+"use strict";
+const $ = (sel, root = document) => root.querySelector(sel);
+
+/** Builds an element: h("div", {class: "card", onclick: f}, "text", child, ...). Text is never parsed as HTML. */
+function h(tag, attrs, ...children) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === false || v == null) continue;
+    if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "class") el.className = v;
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of children.flat()) if (c != null && c !== false) el.append(c instanceof Node ? c : String(c));
+  return el;
+}
+
+async function api(path, body) {
+  let response;
+  try {
+    response = await fetch(path, body === undefined ? { cache: "no-store" } : {
+      method: "POST", cache: "no-store",
+      headers: { "Content-Type": "application/json", "X-Voca": "1" },
+      body: JSON.stringify(body)
+    });
+  } catch {
+    $("#offline").hidden = false;
+    throw new Error("offline");
+  }
+  $("#offline").hidden = true;
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (response.status === 401) location.reload();
+    throw new Error(json.error || "Có lỗi xảy ra.");
+  }
+  return json;
+}
+
+// ---------------------------------- speech ----------------------------------
+function speak(text) {
+  if (!("speechSynthesis" in window) || !text) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "en-US";
+  const voices = speechSynthesis.getVoices();
+  const voice = voices.find(v => v.lang === "en-US") || voices.find(v => v.lang.startsWith("en"));
+  if (voice) u.voice = voice;
+  u.rate = 0.9;
+  speechSynthesis.speak(u);
+}
+if ("speechSynthesis" in window) speechSynthesis.getVoices();
+
+// ---------------------------------- toast ----------------------------------
+let toastTimer;
+function toast(message, undo) {
+  if (!message) return;
+  const box = $("#toast");
+  $("p", box).textContent = message;
+  const button = $("button", box);
+  button.hidden = !undo;
+  button.onclick = async () => { box.hidden = true; const r = await api("/api/undo", {}); toast(r.message); loadToday(); };
+  box.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => box.hidden = true, undo ? 7000 : 4000);
+}
+
+function errorToast(e) { if (e.message !== "offline") toast(e.message); }
+
+// ---------------------------------- tabs ----------------------------------
+let current = "today";
+function show(view) {
+  current = view;
+  for (const b of document.querySelectorAll("nav.tabs button")) b.classList.toggle("on", b.dataset.view === view);
+  for (const v of ["today", "video", "words", "add"]) $("#view-" + v).hidden = v !== view;
+  if (view === "today") loadToday();
+  if (view === "words" && !wordsLoaded) loadWords(true);
+  if (view === "add") renderAdd();
+  if (view === "video") loadVideos();
+  window.scrollTo(0, 0);
+}
+for (const b of document.querySelectorAll("nav.tabs button")) b.onclick = () => show(b.dataset.view);
+$("#retry").onclick = () => show(current);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") { if (player) saveProgress(); return; }
+  if (current === "today" && $("#session").hidden && !player) loadToday();
+});
+
+// ---------------------------------- a word card ----------------------------------
+/** Word, phonetics and example on the front; the meaning sits face down on a card that flips on tap. */
+function wordCard(w, { flipped = false, onflip } = {}) {
+  const flip = h("button", { class: "flip" + (flipped ? " open" : ""), onclick: () => onflip && onflip() },
+    flipped
+      ? [h("div", { class: "meaning" }, w.meaning || "(chưa có nghĩa)"), w.exampleMeaning ? h("div", { class: "ex-vi" }, w.exampleMeaning) : null]
+      : [h("div", { class: "muted" }, "Nghĩa là gì?"), h("div", { style: "font-weight:600;color:var(--accent-ink)" }, "Chạm để lật")]);
+  return [
+    h("div", { class: "word-line" },
+      h("div", { class: "word" }, w.text),
+      h("button", { class: "speak", "aria-label": "Phát âm", onclick: e => { e.stopPropagation(); speak(w.text); } }, "🔊")),
+    h("div", { class: "phon" }, [w.phonetic, w.pos].filter(Boolean).join("  ·  ")),
+    w.example ? h("div", { class: "example" }, "“" + w.example + "”") : null,
+    flip
+  ];
+}
+
+/** Swipe left / right on an element. */
+function swipe(el, left, right) {
+  let x0 = null, y0 = null;
+  el.addEventListener("touchstart", e => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+  el.addEventListener("touchend", e => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0;
+    x0 = null;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > 1.5 * Math.abs(dy)) (dx < 0 ? left : right)();
+  }, { passive: true });
+}
+
+// ---------------------------------- today ----------------------------------
+let today = null, index = 0, flipped = false;
+
+async function loadToday(keepId) {
+  const id = keepId ?? today?.words[index]?.id;
+  try { today = await api("/api/today"); } catch (e) { errorToast(e); return; }
+  const found = today.words.findIndex(w => w.id === id);
+  index = found >= 0 ? found : Math.min(index, Math.max(0, today.words.length - 1));
+  if (found < 0) flipped = false;
+  renderToday();
+}
+
+function renderToday() {
+  const view = $("#view-today");
+  const s = $("#streak");
+  s.hidden = !today.streak;
+  s.textContent = "🔥 " + today.streak + " ngày";
+  const c = today.course;
+  const course = c && h("div", { class: "card" },
+    h("div", { class: "eyebrow" }, c.title),
+    c.dayTitle ? h("div", { style: "font-weight:700;margin-top:4px" }, c.dayTitle) : null,
+    c.dots.length ? h("div", { class: "dots" }, c.dots.map(d => h("i", { class: d }))) : h("div", { class: "spacer" }),
+    h("div", { class: "muted" }, c.status),
+    today.mistakes ? h("div", { class: "muted", style: "margin-top:4px" }, today.mistakes + " từ sai đang chờ học lại") : null,
+    h("div", { class: "spacer" }),
+    h("button", { class: "btn primary block", onclick: openSession }, c.session));
+
+  if (!today.words.length) {
+    view.replaceChildren(course || "", h("div", { class: "card empty" },
+      h("div", { class: "big" }, "🎉"),
+      h("div", { style: "font-weight:700;margin:6px 0" }, "Hôm nay hết từ để học"),
+      h("div", { class: "muted" }, "Không còn từ mới hay từ cần ôn. Hẹn bạn ngày mai!")));
+    return;
+  }
+  const w = today.words[index];
+  const go = d => { const n = index + d; if (n < 0 || n >= today.words.length) return; index = n; flipped = false; renderToday(); };
+  const card = h("div", { class: "card" },
+    h("div", { class: "counter" },
+      h("button", { class: "nav", "aria-label": "Từ trước", disabled: index === 0, onclick: () => go(-1) }, "‹"),
+      h("div", { style: "text-align:center" },
+        h("span", { class: "badge " + w.kind }, w.badge),
+        h("div", { class: "muted", style: "font-size:13px;margin-top:2px" }, (index + 1) + " / " + today.words.length)),
+      h("button", { class: "nav", "aria-label": "Từ sau", disabled: index === today.words.length - 1, onclick: () => go(1) }, "›")),
+    wordCard(w, { flipped, onflip: () => { flipped = !flipped; renderToday(); } }),
+    h("div", { class: "info" }, w.info),
+    h("div", { class: "spacer" }),
+    h("div", { class: "row" },
+      h("button", { class: "btn good", onclick: () => rate(w, true) }, "✓ Đã thuộc"),
+      h("button", { class: "btn bad", onclick: () => rate(w, false) }, "✗ Chưa nhớ")));
+  swipe(card, () => go(1), () => go(-1));
+  view.replaceChildren(card, course || "");
+}
+
+async function rate(w, learned) {
+  const next = today.words[index + 1]?.id ?? today.words[index - 1]?.id;
+  try {
+    const r = await api("/api/rate", { id: w.id, learned });
+    toast(r.message, r.undo);
+    flipped = false;
+    await loadToday(learned ? next : w.id);
+  } catch (e) { errorToast(e); }
+}
+
+// ---------------------------------- session ----------------------------------
+let session = null;
+
+async function openSession() {
+  let data;
+  try { data = await api("/api/session"); } catch (e) { errorToast(e); return; }
+  session = { ...data, stage: data.learn.length ? "learn" : "quiz", i: 0, flipped: false, picked: null, answers: [], result: null, ticks: new Set() };
+  $("#session").hidden = false;
+  document.body.style.overflow = "hidden";
+  renderSession();
+}
+
+function closeSession() {
+  if (session && session.stage === "quiz" && session.answers.length &&
+      !confirm("Thoát phiên học? Các câu đã trả lời chưa được lưu.")) return;
+  const ticked = session?.stage === "result" ? [...session.ticks] : [];
+  session = null;
+  $("#session").hidden = true;
+  document.body.style.overflow = "";
+  if (ticked.length) api("/api/learned", { ids: ticked }).then(r => { toast(r.message); loadToday(); }, errorToast);
+  else loadToday();
+}
+
+function renderSession() {
+  const s = session, sheet = $("#session");
+  if (!s.quiz.length) {
+    sheet.replaceChildren(sessionHeader(), h("main", {}, h("div", { class: "card empty" },
+      h("div", { class: "big" }, "✓"),
+      h("div", { class: "muted" }, "Hôm nay không có từ mới hay từ cần ôn. Hẹn bạn ngày mai!"),
+      h("div", { class: "spacer" }),
+      h("button", { class: "btn block", onclick: closeSession }, "Đóng"))));
+    return;
+  }
+  const order = ["learn", "quiz", "result"];
+  const stages = h("div", { class: "stages" },
+    (s.learn.length ? order : order.slice(1)).map(st => h("span", {
+      class: st === s.stage ? "on" : order.indexOf(st) < order.indexOf(s.stage) ? "past" : ""
+    }, { learn: s.mode === "mistake" ? "Xem lại từ sai" : "Học từ mới", quiz: "Kiểm tra", result: "Kết quả" }[st])));
+  const body = s.stage === "learn" ? renderLearn() : s.stage === "quiz" ? renderQuiz() : renderResult();
+  sheet.replaceChildren(sessionHeader(), h("main", {}, stages, body));
+  sheet.scrollTop = 0;
+}
+
+function sessionHeader() {
+  return h("header", {},
+    h("div", { style: "flex:1;min-width:0" },
+      h("div", { class: "eyebrow", style: "white-space:nowrap;overflow:hidden;text-overflow:ellipsis" }, session.title)),
+    h("button", { class: "close", "aria-label": "Đóng", onclick: closeSession }, "✕"));
+}
+
+function renderLearn() {
+  const s = session, w = s.learn[s.i];
+  const last = s.i === s.learn.length - 1;
+  const next = () => { if (last) { s.stage = "quiz"; s.i = 0; } else s.i++; s.flipped = false; renderSession(); };
+  const back = () => { if (s.i > 0) { s.i--; s.flipped = false; renderSession(); } };
+  const card = h("div", { class: "card" },
+    h("div", { class: "muted", style: "text-align:center;font-size:13px" },
+      (s.mode === "mistake" ? "Từ sai " : "Từ mới ") + (s.i + 1) + " / " + s.learn.length),
+    wordCard(w, { flipped: s.flipped, onflip: () => { s.flipped = !s.flipped; renderSession(); } }));
+  swipe(card, next, back);
+  return [card, h("div", { class: "row" },
+    h("button", { class: "btn", disabled: s.i === 0, onclick: back }, "‹ Trước"),
+    h("button", { class: "btn primary", onclick: next }, last ? "Bắt đầu kiểm tra" : "Tiếp ›"))];
+}
+
+function renderQuiz() {
+  const s = session, q = s.quiz[s.i];
+  const label = { ChooseWord: "Từ nào có nghĩa là:", ChooseMeaning: "Nghĩa của từ này là gì?", Cloze: "Chọn từ điền vào chỗ trống:", Type: "Gõ từ tiếng Anh có nghĩa là:" }[q.kind];
+  const promptClass = "prompt" + (q.kind === "Cloze" ? " cloze" : q.kind === "ChooseMeaning" ? " meaning-q" : "");
+  const parts = [h("div", { class: "muted" }, label), h("div", { class: promptClass }, q.prompt)];
+  if (q.kind === "Type") {
+    const input = h("input", { class: "field", autocapitalize: "off", autocomplete: "off", autocorrect: "off", spellcheck: "false",
+      enterkeyhint: "done", placeholder: "Gõ từ…", value: s.picked?.given ?? "", readonly: s.picked !== null });
+    const check = async () => {
+      const typed = input.value.trim();
+      if (!typed) { input.focus(); return; }
+      try { const r = await api("/api/check", { typed, answer: q.correct }); pick(typed, r.correct); } catch (e) { errorToast(e); }
+    };
+    input.addEventListener("keydown", e => { if (e.key === "Enter") check(); });
+    parts.push(input, h("div", { class: "spacer" }));
+    if (s.picked === null) { parts.push(h("button", { class: "btn primary block", onclick: check }, "Kiểm tra")); setTimeout(() => input.focus(), 50); }
+  } else {
+    for (const option of q.options) {
+      const state = s.picked === null ? "" : option === q.correct ? " right" : option === s.picked.given ? " wrong" : "";
+      parts.push(h("button", { class: "option" + state, disabled: s.picked !== null, onclick: () => pick(option, option === q.correct) }, option));
+    }
+  }
+  if (s.picked !== null) {
+    parts.push(h("div", { class: "feedback " + (s.picked.correct ? "ok" : "no") }, s.picked.correct
+      ? (q.kind === "ChooseMeaning" ? "Chính xác." : "Chính xác. " + q.text + " " + q.phonetic)
+      : "Chưa đúng. " + q.text + " = " + q.meaning + ". Từ này sẽ quay lại vào ngày mai."));
+    const last = s.i === s.quiz.length - 1;
+    parts.push(h("button", { class: "btn primary block", onclick: last ? finishQuiz : () => { s.i++; s.picked = null; renderSession(); } },
+      last ? "Xem kết quả" : "Câu tiếp"));
+  }
+  parts.push(h("div", { class: "muted", style: "text-align:center;margin-top:12px" },
+    "Câu " + (s.i + 1) + " / " + s.quiz.length + " · đúng " + s.answers.filter(a => a.correct).length));
+  return h("div", { class: "card" }, parts);
+}
+
+function pick(given, correct) {
+  const s = session, q = s.quiz[s.i];
+  if (s.picked !== null) return;
+  s.picked = { given, correct };
+  s.answers.push({ id: q.id, correct });
+  if (q.askWord) speak(q.text);
+  renderSession();
+}
+
+async function finishQuiz() {
+  const s = session;
+  try {
+    s.result = await api("/api/session", { answers: s.answers, newIds: s.newIds });
+  } catch (e) { errorToast(e); return; }
+  s.stage = "result";
+  renderSession();
+}
+
+function renderResult() {
+  const s = session, r = s.result;
+  const open = r.results.filter(x => !x.learned);
+  const rows = r.results.map(x => h("div", { class: "result" },
+    h("span", { class: "mk " + (x.correct ? "ok" : "no") }, x.correct ? "✓" : "✗"),
+    h("div", { class: "body" }, h("div", { style: "font-weight:700" }, x.text), h("div", { class: "m" }, x.meaning + " · " + x.next)),
+    x.learned ? null : h("label", {},
+      h("input", { type: "checkbox", checked: s.ticks.has(x.id), onchange: e => e.target.checked ? s.ticks.add(x.id) : s.ticks.delete(x.id) }),
+      "Đã thuộc")));
+  return [
+    h("div", { class: "card" },
+      h("div", { class: "score" }, r.score),
+      h("div", { class: "muted", style: "text-align:center" }, r.note)),
+    open.length ? h("div", { class: "card" },
+      h("div", { class: "muted" }, s.mode === "mistake"
+        ? "Tích “Đã thuộc” cho từ bạn đã nhớ chắc — từ đó sẽ không hiện nữa."
+        : "Tích “Đã thuộc” cho từ bạn đã nhớ chắc. Thuộc hết từ của ngày thì lộ trình sang ngày tiếp."),
+      r.results.some(x => x.correct && !x.learned)
+        ? h("button", { class: "btn good", style: "margin-top:8px", onclick: () => { for (const x of open) if (x.correct) s.ticks.add(x.id); renderSession(); } }, "Tích các từ trả lời đúng")
+        : null) : null,
+    h("div", { class: "card" }, rows),
+    h("button", { class: "btn primary block", onclick: closeSession }, "Xong")
+  ];
+}
+
+// ---------------------------------- all words ----------------------------------
+let wordsLoaded = false, words = { items: [], total: 0 }, query = "", filter = "all", openId = null, searchTimer;
+const filters = [["all", "Tất cả"], ["due", "Đến hạn ôn"], ["learning", "Đang học"], ["new", "Chưa học"], ["known", "Đã thuộc"]];
+
+function renderWordsShell() {
+  const view = $("#view-words");
+  const search = h("input", { class: "field", type: "search", placeholder: "Tìm từ hoặc nghĩa (gõ không dấu cũng được)", value: query,
+    autocapitalize: "off", autocorrect: "off", spellcheck: "false" });
+  search.addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { query = search.value; loadWords(true); }, 250); });
+  view.replaceChildren(search,
+    h("div", { class: "filters" }, filters.map(([key, name]) =>
+      h("button", { class: key === filter ? "on" : "", onclick: () => { filter = key; renderWordsShell(); loadWords(true); } }, name))),
+    h("div", { id: "words-count", class: "muted", style: "margin-bottom:8px" }),
+    h("div", { id: "words-list" }));
+}
+
+async function loadWords(reset) {
+  if (!$("#view-words").childElementCount) renderWordsShell();
+  const skip = reset ? 0 : words.items.length;
+  let r;
+  try { r = await api("/api/words?" + new URLSearchParams({ q: query, filter, skip })); } catch (e) { errorToast(e); return; }
+  wordsLoaded = true;
+  words = { total: r.total, items: reset ? r.items : words.items.concat(r.items) };
+  renderWordList();
+}
+
+function renderWordList() {
+  $("#words-count").textContent = words.total + " từ";
+  const list = words.items.map(w => h("button", { class: "item", onclick: () => { openId = openId === w.id ? null : w.id; renderWordList(); } },
+    h("div", { class: "top" }, h("span", { class: "t" }, w.text), h("span", { class: "st " + w.status }, w.statusText)),
+    h("div", { class: "m" }, w.meaning),
+    openId === w.id ? h("div", { class: "detail" },
+      h("div", { class: "phon" }, [w.phonetic, w.pos].filter(Boolean).join("  ·  ")),
+      w.example ? h("div", { class: "example", style: "margin-top:6px" }, "“" + w.example + "”") : null,
+      w.exampleMeaning ? h("div", { class: "muted" }, w.exampleMeaning) : null,
+      h("div", { class: "muted", style: "margin-top:6px;font-size:12px" }, w.where),
+      h("div", { style: "margin-top:8px" }, h("span", { class: "btn", onclick: e => { e.stopPropagation(); speak(w.text); } }, "🔊 Phát âm"))) : null));
+  $("#words-list").replaceChildren(
+    words.items.length ? h("div", { class: "list" }, list) : h("div", { class: "card empty muted" }, "Không có từ nào."),
+    words.items.length < words.total ? h("button", { class: "btn block", style: "margin-top:10px", onclick: () => loadWords(false) },
+      "Xem thêm (" + (words.total - words.items.length) + " từ)") : "");
+}
+
+// ---------------------------------- add a word ----------------------------------
+let lookupTimer;
+function renderAdd() {
+  const view = $("#view-add");
+  if (view.childElementCount) return;
+  const field = (name, label, attrs = {}) => [h("label", { class: "lbl", for: "add-" + name }, label),
+    h(attrs.multiline ? "textarea" : "input", { class: "field", id: "add-" + name, rows: attrs.multiline ? 2 : null,
+      autocapitalize: attrs.en ? "off" : null, autocorrect: attrs.en ? "off" : null, spellcheck: attrs.en ? "false" : null, placeholder: attrs.placeholder })];
+  const status = h("div", { id: "add-status", class: "muted", style: "margin-top:6px;min-height:20px" });
+  view.replaceChildren(h("div", { class: "card" },
+    h("div", { style: "font-weight:700" }, "Thêm vào Từ của tôi"),
+    h("div", { class: "muted" }, "Lưu kèm nghĩa thì từ vào ôn tập ngay hôm nay. Chưa biết nghĩa thì “Để AI điền sau”, rồi nhờ AI điền cả danh sách trên máy tính."),
+    field("text", "Từ hoặc cụm từ", { en: true, placeholder: "vd. take after" }), status,
+    field("meaning", "Nghĩa tiếng Việt"),
+    field("phonetic", "Phiên âm", { en: true, placeholder: "/ˌteɪk ˈɑːftər/" }),
+    field("pos", "Loại từ", { en: true, placeholder: "n, v, adj, phr v…" }),
+    field("example", "Ví dụ", { en: true, multiline: true }),
+    field("exampleMeaning", "Dịch ví dụ", { multiline: true }),
+    h("div", { class: "spacer" }),
+    h("div", { class: "row" },
+      h("button", { class: "btn primary", onclick: () => addWord(true) }, "Lưu"),
+      h("button", { class: "btn", onclick: () => addWord(false) }, "Để AI điền sau"))));
+  $("#add-text").addEventListener("input", e => {
+    clearTimeout(lookupTimer);
+    lookupTimer = setTimeout(async () => {
+      const text = e.target.value.trim();
+      if (!text) { status.textContent = ""; return; }
+      try {
+        const r = await api("/api/lookup?" + new URLSearchParams({ text }));
+        status.textContent = !r.valid ? "Hãy nhập một từ hoặc cụm từ ngắn (tối đa 6 từ, không có chữ số)." : r.message;
+      } catch (err) { errorToast(err); }
+    }, 300);
+  });
+}
+
+async function addWord(withMeaning) {
+  const value = name => $("#add-" + name).value.trim();
+  if (withMeaning && !value("meaning")) { toast("Hãy ghi nghĩa tiếng Việt (hoặc bấm “Để AI điền sau”)."); $("#add-meaning").focus(); return; }
+  const body = { text: value("text"), meaning: withMeaning ? value("meaning") : "", phonetic: value("phonetic"), pos: value("pos"),
+    example: value("example"), exampleMeaning: value("exampleMeaning") };
+  try {
+    const r = await api("/api/add", body);
+    toast(r.message);
+    if (r.ok) {
+      for (const el of document.querySelectorAll("#view-add .field")) el.value = "";
+      $("#add-status").textContent = "";
+      wordsLoaded = false;
+    }
+  } catch (e) { errorToast(e); }
+}
+
+// ---------------------------------- videos ----------------------------------
+const clock = s => {
+  s = Math.max(0, Math.floor(s || 0));
+  const hh = Math.floor(s / 3600), mm = Math.floor(s % 3600 / 60), ss = String(s % 60).padStart(2, "0");
+  return hh ? hh + ":" + String(mm).padStart(2, "0") + ":" + ss : mm + ":" + ss;
+};
+
+let videos = null, openFilm = null;
+
+async function loadVideos() {
+  try { videos = await api("/api/videos"); } catch (e) { errorToast(e); return; }
+  if (openFilm && !videos.films.some(f => f.key === openFilm)) openFilm = null;
+  renderVideos();
+}
+
+/** One episode (or video) row: name, subtitles, a warning for formats phones may not play, how far it was watched. */
+function videoRow(v) {
+  return h("button", { class: "item video-item", onclick: () => openPlayer(v.id) },
+    h("div", { class: "top" }, h("span", { class: "t" }, v.name), v.finished ? h("span", { class: "st learned" }, "Đã xem") : null),
+    h("div", { class: "meta" },
+      h("span", { class: "st" + (v.srt ? " learning" : "") }, v.srt ? "Có phụ đề" : "Chưa có phụ đề"),
+      v.phone ? null : h("span", { class: "st due" }, "." + v.ext + " · có thể không phát được")),
+    v.progress > 0 && !v.finished ? h("div", { class: "bar" }, h("i", { style: "width:" + Math.round(v.progress * 100) + "%" })) : null);
+}
+
+function renderVideos() {
+  const view = $("#view-video"), r = videos;
+  const film = openFilm && r.films.find(f => f.key === openFilm);
+  if (film) {
+    view.replaceChildren(
+      h("button", { class: "btn", style: "margin-bottom:10px", onclick: () => { openFilm = null; renderVideos(); window.scrollTo(0, 0); } }, "‹ Tất cả phim"),
+      h("div", { class: "card" },
+        h("div", { class: "word", style: "font-size:26px;margin:0" }, film.name),
+        h("div", { class: "muted" }, film.status + " · " + film.subtitles + "/" + film.count + " tập có phụ đề · đã xem " + film.watched)),
+      h("div", { class: "list" }, film.videos.map(videoRow)));
+    return;
+  }
+  const parts = [];
+  if (r.continue) parts.push(h("button", { class: "card btn vcont", onclick: () => openPlayer(r.continue.id) },
+    h("span", { class: "play" }, "▶"),
+    h("div", { style: "flex:1;min-width:0" }, h("div", { class: "s" }, r.continue.text), h("div", { class: "t" }, r.continue.name))));
+  if (r.films.length) {
+    parts.push(h("div", { class: "folder" }, "PHIM"));
+    parts.push(h("div", { class: "list" }, r.films.map(f => h("button", {
+      class: "item film-item",
+      onclick: () => { if (f.count === 1) openPlayer(f.videos[0].id); else { openFilm = f.key; renderVideos(); window.scrollTo(0, 0); } }
+    },
+      h("div", { class: "top" }, h("span", { class: "t", style: "font-size:17px" }, f.name), h("span", { class: "muted" }, f.count > 1 ? "›" : "▶")),
+      h("div", { class: "m" }, f.status),
+      f.count > 1 ? h("div", { class: "bar" }, h("i", { style: "width:" + Math.round(f.watched / f.count * 100) + "%" })) : null))));
+  }
+  for (const f of r.folders) {
+    parts.push(h("div", { class: "folder" }, "📁 " + f.name));
+    parts.push(h("div", { class: "list" }, f.videos.map(videoRow)));
+  }
+  if (!r.films.length && !r.folders.length) parts.push(h("div", { class: "card empty" },
+    h("div", { class: "big" }, "🎬"),
+    h("div", { style: "font-weight:700;margin:6px 0" }, r.filmFolder ? "Thư mục phim chưa có phim nào" : "Chưa có phim nào"),
+    h("div", { class: "muted" }, r.filmFolder
+      ? "Mỗi phim là một thư mục con trong " + r.filmFolder + ", bên trong là các tập (mp4 kèm .srt cùng tên)."
+      : "Trên máy tính, chọn thư mục phim ở Thư viện → Cài đặt → Học trên điện thoại → Chọn thư mục phim…")));
+  view.replaceChildren(...parts);
+}
+
+let player = null;
+
+/** Opens a video with its subtitles; the subtitle sits under the video (or on it in landscape / full screen). */
+async function openPlayer(id, push = true) {
+  let data;
+  try { data = await api("/api/video?" + new URLSearchParams({ id })); } catch (e) { errorToast(e); return; }
+  if (player) closePlayer({ back: false, reload: false });
+  const video = h("video", { playsinline: true, "webkit-playsinline": true, controls: true, preload: "metadata",
+    controlslist: "nofullscreen nodownload noremoteplayback", src: "/media/" + id });
+  if (data.lines.length) video.append(h("track", { kind: "subtitles", srclang: "en", label: "English", src: "/media/" + id + ".vtt" }));
+  const sub = h("div", { class: "sub", onclick: () => video.paused ? video.play() : video.pause() });
+  const stage = h("div", { class: "stage" }, video, sub);
+  const transcript = h("div", { class: "transcript" });
+  const nextBox = h("div", {});
+  player = { id, data, video, sub, stage, transcript, nextBox, line: -2, showSubs: true, ended: false, timer: 0, popResume: false };
+
+  const ccButton = h("button", { class: "on", onclick: () => { player.showSubs = !player.showSubs; ccButton.classList.toggle("on", player.showSubs); renderLine(true); } }, "CC");
+  const speed = h("select", { "aria-label": "Tốc độ", onchange: () => video.playbackRate = Number(speed.value) },
+    [0.5, 0.75, 1, 1.25, 1.5].map(s => h("option", { value: s, selected: s === 1 }, s + "×")));
+  const tools = h("div", { class: "tools" },
+    h("button", { onclick: replayLine }, "⏮ Câu"),
+    h("button", { onclick: () => { video.currentTime = Math.max(0, video.currentTime - 5); } }, "↺ 5 giây"),
+    speed, ccButton,
+    h("button", { onclick: fullscreen }, "⛶ Toàn màn hình"));
+  const top = h("div", { class: "top" },
+    h("button", { "aria-label": "Đóng", onclick: () => closePlayer() }, "‹"),
+    h("div", { class: "name" }, data.name));
+  const legend = data.lines.length ? h("div", { class: "legend" },
+    h("span", { class: "w-new" }, "Từ mới"), "chạm để lưu",
+    h("span", { class: "w-learning" }, "Đang học"), "chạm xem nghĩa",
+    h("span", { class: "w-waiting" }, "Đã lưu")) : null;
+  transcript.replaceChildren(...data.lines.map((line, i) => h("div", { class: "tline", "data-i": i, onclick: () => { video.currentTime = line.s; video.play(); } },
+    h("span", { class: "at" }, clock(line.s)), h("span", {}, renderParts(line.parts)))));
+
+  const root = $("#player");
+  root.replaceChildren(top, stage, tools, nextBox, legend || "", transcript);
+  root.hidden = false;
+  root.scrollTop = 0;
+  document.body.style.overflow = "hidden";
+  if (push) history.pushState({ player: id }, "");
+
+  video.addEventListener("loadedmetadata", () => {
+    if (video.textTracks[0]) video.textTracks[0].mode = "hidden";
+    if (data.resume > 5) {
+      video.currentTime = data.resume;
+      toast("Xem tiếp từ " + clock(data.resume) + " · kéo thanh thời gian để xem từ đầu");
+    }
+  });
+  video.addEventListener("timeupdate", () => renderLine());
+  video.addEventListener("seeked", () => renderLine());
+  video.addEventListener("pause", () => saveProgress());
+  video.addEventListener("play", () => { player && (player.ended = false); nextBox.replaceChildren(); });
+  video.addEventListener("ended", () => {
+    player.ended = true;
+    saveProgress(true);
+    if (data.next) nextBox.replaceChildren(h("button", { class: "btn block next-ep", onclick: () => openPlayer(data.next.id, false) }, "▶ Tập tiếp: " + data.next.name));
+  });
+  video.addEventListener("error", () => {
+    sub.className = "sub empty";
+    sub.textContent = "Điện thoại không phát được video này. Trên máy tính, chuyển video sang mp4 (H.264) rồi mở lại.";
+  });
+  // iPhone plays full screen in its own player, which cannot show this page: show its plain subtitles there.
+  video.addEventListener("webkitbeginfullscreen", () => { if (video.textTracks[0] && player.showSubs) video.textTracks[0].mode = "showing"; });
+  video.addEventListener("webkitendfullscreen", () => { if (video.textTracks[0]) video.textTracks[0].mode = "hidden"; });
+  player.timer = setInterval(() => { if (player && !video.paused) saveProgress(); }, 5000);
+  renderLine(true);
+  video.play().catch(() => { /* needs a tap on play first */ });
+}
+
+/** Subtitle text with the marked words as tappable spans. */
+function renderParts(parts) {
+  return parts.map(p => p.m
+    ? h("span", { class: "w-" + p.m, onclick: e => { e.stopPropagation(); wordTap(p); } }, p.t)
+    : p.t);
+}
+
+function lineAt(t) {
+  const lines = player.data.lines;
+  let lo = 0, hi = lines.length - 1;
+  while (lo <= hi) { const mid = (lo + hi) >> 1; if (lines[mid].s <= t) lo = mid + 1; else hi = mid - 1; }
+  return hi >= 0 && t < lines[hi].e ? hi : -1;
+}
+
+function renderLine(force) {
+  if (!player) return;
+  const { data, video, sub, transcript } = player;
+  if (!data.lines.length) {
+    if (sub.className !== "sub empty") {
+      sub.className = "sub empty";
+      sub.textContent = "Video này chưa có phụ đề. Tạo trên máy tính: Thư viện → Phụ đề video → Tạo phụ đề.";
+    }
+    return;
+  }
+  const i = lineAt(video.currentTime);
+  if (i === player.line && !force) return;
+  player.line = i;
+  sub.className = "sub";
+  sub.replaceChildren(...(player.showSubs && i >= 0 ? renderParts(data.lines[i].parts) : []));
+  transcript.querySelector(".tline.now")?.classList.remove("now");
+  const row = i >= 0 ? transcript.children[i] : null;
+  if (row) {
+    row.classList.add("now");
+    if (getComputedStyle(transcript).overflowY === "auto")
+      transcript.scrollTo({ top: row.offsetTop - transcript.offsetTop - transcript.clientHeight / 3, behavior: "smooth" });
+  }
+}
+
+/** Back to the start of the line on screen, or of the one before when already at its start. */
+function replayLine() {
+  const { video, data } = player;
+  const t = video.currentTime;
+  const line = [...data.lines].reverse().find(l => l.s < t - 1);
+  video.currentTime = line ? line.s : 0;
+  video.play();
+}
+
+function fullscreen() {
+  const { stage, video } = player;
+  if (document.fullscreenElement) { document.exitFullscreen(); return; }
+  const native = () => video.webkitEnterFullscreen && video.webkitEnterFullscreen();
+  if (!stage.requestFullscreen) { native(); return; }
+  stage.requestFullscreen()
+    .then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock("landscape").catch(() => {}))
+    .catch(native);
+}
+
+function saveProgress(final) {
+  if (!player) return;
+  const v = player.video;
+  if (!v.duration || !isFinite(v.duration)) return;
+  fetch("/api/video/progress", {
+    method: "POST", keepalive: true,
+    headers: { "Content-Type": "application/json", "X-Voca": "1" },
+    body: JSON.stringify({ id: player.id, seconds: final ? v.duration : v.currentTime, length: v.duration })
+  }).catch(() => {});
+}
+
+function closePlayer({ back = true, reload = true } = {}) {
+  if (!player) return;
+  const { video, timer, ended } = player;
+  if (!ended) saveProgress();
+  clearInterval(timer);
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  video.pause();
+  video.removeAttribute("src");
+  video.load();
+  player = null;
+  $("#word-pop").hidden = true;
+  $("#player").hidden = true;
+  $("#player").replaceChildren();
+  document.body.style.overflow = "";
+  if (back && history.state && history.state.player) history.back();
+  if (reload && current === "video") loadVideos();
+}
+
+window.addEventListener("popstate", () => { if (player) closePlayer({ back: false }); });
+
+// A word tapped in the subtitle: the video pauses and a card shows the meaning (or offers to save a new word).
+function wordTap(part) {
+  if (!player) return;
+  const video = player.video;
+  player.popResume = player.popResume || !video.paused;
+  video.pause();
+  const pop = $("#word-pop");
+  const close = () => { pop.hidden = true; if (player && player.popResume) video.play(); if (player) player.popResume = false; };
+  const head = h("div", { class: "word-line" },
+    h("div", { class: "word" }, part.m === "learning" ? part.word : part.t),
+    h("button", { class: "speak", "aria-label": "Phát âm", onclick: () => speak(part.m === "learning" ? part.word : part.t) }, "🔊"));
+  const body = part.m === "learning"
+    ? [h("div", { class: "phon" }, part.phonetic || ""), h("div", { style: "font-size:19px;font-weight:600;margin-top:6px" }, part.meaning)]
+    : part.m === "new"
+      ? [h("div", { class: "muted" }, "Từ mới của video — chưa có trong thư viện.")]
+      : [h("div", { class: "muted" }, "Đã lưu trong Từ của tôi, đang chờ điền nghĩa.")];
+  const save = part.m === "new" ? h("button", { class: "btn primary", onclick: async () => {
+    try {
+      const r = await api("/api/video/word", { text: part.t });
+      toast(r.message);
+      await refreshMarks();
+    } catch (e) { errorToast(e); }
+    close();
+  } }, "Lưu vào Từ của tôi") : null;
+  pop.replaceChildren(head, ...body, h("div", { class: "spacer" }),
+    h("div", { class: "row" }, save, h("button", { class: "btn", onclick: close }, "Tiếp tục xem")));
+  pop.hidden = false;
+}
+
+/** After saving a word, the marks of every line change (it is now "Đã lưu"). */
+async function refreshMarks() {
+  if (!player) return;
+  const data = await api("/api/video?" + new URLSearchParams({ id: player.id }));
+  if (!player) return;
+  player.data.lines = data.lines;
+  data.lines.forEach((line, i) => {
+    const row = player.transcript.children[i];
+    if (row) row.lastChild.replaceChildren(...renderParts(line.parts));
+  });
+  renderLine(true);
+}
+
+show("today");
+</script>
+</body>
+</html>

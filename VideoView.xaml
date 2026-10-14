@@ -27,6 +27,23 @@
             <Border Style="{StaticResource Panel}">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top">
+                        <!-- the film library: each subfolder of the film folder is a film, its videos the episodes -->
+                        <DockPanel Margin="-3,0,0,4">
+                            <TextBlock DockPanel.Dock="Left" Text="Phim" FontWeight="SemiBold" Foreground="{StaticResource Ink}" VerticalAlignment="Center" Margin="3,0,8,0"/>
+                            <Grid>
+                                <ComboBox x:Name="FilmBox" DisplayMemberPath="Text" Padding="6,4" SelectionChanged="FilmBox_SelectionChanged"
+                                          ToolTip="Chọn phim để thấy các tập: bấm một tập để xem phụ đề và phát; “Tạo phụ đề” tạo cho các tập chưa có"/>
+                                <TextBlock x:Name="FilmHint" Text="Chọn phim…" Foreground="{StaticResource Muted}" IsHitTestVisible="False"
+                                           VerticalAlignment="Center" Margin="12,0,0,0"/>
+                            </Grid>
+                        </DockPanel>
+                        <WrapPanel Margin="-3,0,0,10">
+                            <Button x:Name="ScanFilmsButton" Content="Tạo phụ đề cả thư mục" local:UiIcon.Symbol="ClosedCaption24"
+                                    Click="ScanFilms_Click" Background="{StaticResource Accent}" Foreground="White"
+                                    ToolTip="Quét mọi phim trong thư mục phim và tạo lần lượt phụ đề cho mọi tập chưa có (từng tập một, bấm Hủy để dừng)"/>
+                            <Button Content="Thư mục phim…" local:UiIcon.Symbol="FolderOpen24" Click="FilmFolder_Click"
+                                    ToolTip="Chọn thư mục chứa các phim: mỗi thư mục con là một phim, tên thư mục là tên phim"/>
+                        </WrapPanel>
                         <TextBlock Style="{StaticResource Step}" Text="1 · Chọn video và tạo phụ đề"/>
                         <Button x:Name="ContinueButton" Click="Continue_Click" Visibility="Collapsed" local:UiIcon.Symbol="Play24"
                                 HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="-3,0,-3,8" Padding="12,8"
@@ -41,7 +58,7 @@
                         </DockPanel>
                         <!-- several videos: one row each, subtitled one after another -->
                         <StackPanel x:Name="QueuePanel" Visibility="Collapsed" Margin="0,0,0,6">
-                            <ListBox x:Name="QueueList" MaxHeight="140" BorderBrush="#E6E3F5" HorizontalContentAlignment="Stretch"
+                            <ListBox x:Name="QueueList" MaxHeight="200" BorderBrush="#E6E3F5" HorizontalContentAlignment="Stretch"
                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="QueueList_SelectionChanged"
                                      ToolTip="Chọn một video để xem phụ đề, phát video hoặc tìm từ mới của video đó">
                                 <ListBox.ItemTemplate>

@@ -128,6 +128,15 @@ public sealed class Settings
     public bool ShowCreateGuide { get; set; } = true;
     /// <summary>How the word on the taskbar looks.</summary>
     public PillStyle Pill { get; set; } = new();
+    /// <summary>Serve the phone page (Services\PhoneAccess.cs) on the local network while Voca runs.</summary>
+    public bool PhoneAccess { get; set; }
+    public int PhonePort { get; set; } = 8765;
+    /// <summary>Secret in the phone link (QR code); a phone without it is refused. Changing it signs every phone out.</summary>
+    public string PhoneKey { get; set; } = "";
+    /// <summary>The film library: each subfolder is a film (named after the folder) holding its episodes.</summary>
+    public string FilmFolder { get; set; } = "";
+    /// <summary>Folders whose videos the phone lists, besides those already watched on this computer.</summary>
+    public List<string> PhoneVideoFolders { get; set; } = [];
 }
 
 /// <summary>Look of the taskbar word. Colours are "#RRGGBB"; an invalid value falls back to the default.</summary>

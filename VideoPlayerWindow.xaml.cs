@@ -193,13 +193,7 @@ public partial class VideoPlayerWindow : Window
     {
         QuickAddResult? result = null;
         store.Update(d => result = QuickAdd.Add(d, text, DateTime.Now));
-        return result switch
-        {
-            { Added: true } => $"Đã lưu “{result.Text}” vào Từ của tôi. Mở Thư viện → Từ của tôi để nhờ AI điền nghĩa.",
-            { AlreadyWaiting: true } => $"“{result.Text}” đã nằm trong Từ của tôi.",
-            { ExistingPlan: { } plan } => $"“{result.Text}” đã có trong {plan.Name}.",
-            _ => $"Không lưu được “{text}”."
-        };
+        return QuickAdd.Describe(result!, text);
     }
 
     private void Subtitle_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)

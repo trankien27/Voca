@@ -70,6 +70,15 @@ public static partial class QuickAdd
         return new QuickAddResult(text, true, null, null, false);
     }
 
+    /// <summary>What to tell the learner after a word heard in a video was added (<see cref="Add"/>).</summary>
+    public static string Describe(QuickAddResult result, string text) => result switch
+    {
+        { Added: true } => $"Đã lưu “{result.Text}” vào Từ của tôi. Mở Thư viện → Từ của tôi để nhờ AI điền nghĩa.",
+        { AlreadyWaiting: true } => $"“{result.Text}” đã nằm trong Từ của tôi.",
+        { ExistingPlan: { } plan } => $"“{result.Text}” đã có trong {plan.Name}.",
+        _ => $"Không lưu được “{text}”."
+    };
+
     public static void Remove(AppData data, string text) => data.Inbox.RemoveAll(i => Key(i.Text) == Key(text));
 
     public static string DayTitleFor(DateTime now) => $"Từ thêm {now:dd/MM}";

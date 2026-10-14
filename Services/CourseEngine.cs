@@ -124,6 +124,19 @@ public static class CourseEngine
     }
 
     /// <summary>
+    /// What runs before today's words are shown: the course moves on, old mistake days and lists are tidied and
+    /// data from 2.8.1–2.8.2 is repaired. Returns true when something changed (and needs saving).
+    /// </summary>
+    public static bool Upkeep(AppData data, DateTime now)
+    {
+        var moved = Advance(data, now.Date);
+        var cleaned = MistakeDays.Cleanup(data, now.Date);
+        var tidied = MistakeDays.Tidy(data, now);
+        var repaired = DropUnstudiedReviews(data);
+        return moved || cleaned || tidied || repaired;
+    }
+
+    /// <summary>
     /// The latest earlier day of the current plan with words never studied (not answered, not learned) — left
     /// by older versions, which moved on each new date — to offer "Học bù". Null when every earlier day was studied.
     /// </summary>

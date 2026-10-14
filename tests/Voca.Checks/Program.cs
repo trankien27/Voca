@@ -825,5 +825,248 @@ Check(AllWords.Find(aw, d0, filter: WordFilter.Duplicate, planId: aw.Plans[1].Id
       && AllWords.DuplicateKeys(new AppData { Plans = [new Plan { Words = [new Word { Text = "a" }, new Word { Text = "b" }] }] }).Count == 0,
     "all words: a copy in another plan still counts when filtering one plan; no duplicates → none found");
 
+// ---------- phone page ----------
+var phFolder = Path.Combine(Path.GetTempPath(), "voca-phone-" + Guid.NewGuid().ToString("N"));
+var phStore = new Store(phFolder);
+phStore.Update(SeedData.EnsureSeeded);
+var phNow = d0.AddHours(9);
+var phApi = new PhoneApi(phStore, () => phNow);
+PhoneRequest PhReq(string method, string path, string body = "", string? cookie = null, Dictionary<string, string>? query = null, bool header = true)
+{
+    var headers = new Dictionary<string, string>();
+    if (cookie is not null) headers["cookie"] = cookie;
+    if (header) headers["x-voca"] = "1";
+    return new PhoneRequest(method, path, query ?? [], headers, body);
+}
+System.Text.Json.JsonElement PhJson(PhoneResponse r) => System.Text.Json.JsonDocument.Parse(r.Body).RootElement;
+Check(phApi.Handle(PhReq("GET", "/api/today")).Status == 401 && phApi.Handle(PhReq("GET", "/", query: new() { ["k"] = "" })).Status == 401,
+    "phone: refused while no key is set (also with an empty key)");
+phStore.Update(d => d.Settings.PhoneKey = PhoneAccess.NewKey());
+var phKey = phStore.Data.Settings.PhoneKey;
+var phCookie = $"{PhoneApi.CookieName}={phKey}";
+var phLogin = phApi.Handle(PhReq("GET", "/", query: new() { ["k"] = phKey }));
+Check(phKey.Length == 24 && phKey.All(char.IsLetterOrDigit) && PhoneAccess.NewKey() != phKey, "phone: key is 24 random letters/digits");
+Check(phLogin.Status == 302 && phLogin.Headers!["Location"] == "/" && phLogin.Headers["Set-Cookie"].StartsWith(phCookie + ";"),
+    "phone: the QR link stores the key in a cookie and drops it from the address");
+Check(phApi.Handle(PhReq("GET", "/", query: new() { ["k"] = phKey + "x" })).Status == 401
+      && phApi.Handle(PhReq("GET", "/api/today", cookie: $"{PhoneApi.CookieName}=wrong")).Status == 401
+      && phApi.Handle(PhReq("GET", "/", cookie: "other=1")).Status == 401,
+    "phone: a wrong key or no cookie is refused");
+var phPage = phApi.Handle(PhReq("GET", "/", cookie: phCookie));
+Check(phPage.Status == 200 && System.Text.Encoding.UTF8.GetString(phPage.Body).Contains("/api/today"), "phone: the page is served with the cookie");
+Check(phApi.Handle(PhReq("POST", "/api/rate", "{}", phCookie, header: false)).Status == 403, "phone: changes need the X-Voca header (no cross-site requests)");
+var phToday = PhJson(phApi.Handle(PhReq("GET", "/api/today", cookie: phCookie)));
+var phWords = phToday.GetProperty("words");
+Check(phWords.GetArrayLength() == 20 && phWords[0].GetProperty("kind").GetString() == "new"
+      && phToday.GetProperty("course").GetProperty("title").GetString()!.EndsWith("Ngày 1/7")
+      && phToday.GetProperty("course").GetProperty("dots").GetArrayLength() == 7,
+    "phone: today = the 20 new words of day 1, with the course position");
+var phFirst = phWords[0].GetProperty("id").GetGuid();
+var phLearned = PhJson(phApi.Handle(PhReq("POST", "/api/rate", $$"""{"id":"{{phFirst}}","learned":true}""", phCookie)));
+var phWord = phStore.Data.Plans.SelectMany(p => p.Words).First(w => w.Id == phFirst);
+Check(phWord.Learned && phLearned.GetProperty("undo").GetBoolean()
+      && new Store(phFolder).Data.Plans.SelectMany(p => p.Words).First(w => w.Id == phFirst).Learned,
+    "phone: Đã thuộc marks the word and saves it");
+PhJson(phApi.Handle(PhReq("POST", "/api/undo", "{}", phCookie)));
+Check(!phWord.Learned, "phone: Hoàn tác takes it back");
+var phSecond = phWords[1].GetProperty("id").GetGuid();
+phApi.Handle(PhReq("POST", "/api/rate", $$"""{"id":"{{phSecond}}","learned":false}""", phCookie));
+var phForgot = phStore.Data.Plans.SelectMany(p => p.Words).First(w => w.Id == phSecond);
+Check(ReviewScheduler.IsWrongToday(phForgot, d0) && phStore.Data.Mistakes.Any(m => m.WordId == phSecond)
+      && PhJson(phApi.Handle(PhReq("GET", "/api/today", cookie: phCookie))).GetProperty("words")[0].GetProperty("id").GetGuid() == phSecond,
+    "phone: Chưa nhớ counts as wrong and puts the word first");
+var phDay1 = CourseEngine.DayWords(phStore.Data).Select(w => $"\"{w.Id}\"");
+var phMoved = PhJson(phApi.Handle(PhReq("POST", "/api/learned", $$"""{"ids":[{{string.Join(",", phDay1)}}]}""", phCookie)));
+Check(phStore.Data.Position.Day == 2 && phMoved.GetProperty("message").GetString()!.Contains("Sang Ngày 2/7"),
+    "phone: learning every word of the day moves the course on, and says so");
+var phSession = PhJson(phApi.Handle(PhReq("GET", "/api/session", cookie: phCookie)));
+var phQuiz = phSession.GetProperty("quiz");
+Check(phSession.GetProperty("learn").GetArrayLength() == 20 && phQuiz.GetArrayLength() == 20
+      && phQuiz.EnumerateArray().All(q => q.GetProperty("kind").GetString() == "Type" || q.GetProperty("options").EnumerateArray().Any(o => o.GetString() == q.GetProperty("correct").GetString())),
+    "phone: session = day 2's new words to flip, then a quiz with the answer among the options");
+var phAnswers = phQuiz.EnumerateArray().Select((q, i) => $$"""{"id":"{{q.GetProperty("id").GetGuid()}}","correct":{{(i == 0 ? "false" : "true")}}}""");
+var phNewIds = phSession.GetProperty("newIds").EnumerateArray().Select(e => $"\"{e.GetGuid()}\"");
+var phResult = PhJson(phApi.Handle(PhReq("POST", "/api/session", $$"""{"answers":[{{string.Join(",", phAnswers)}}],"newIds":[{{string.Join(",", phNewIds)}}]}""", phCookie)));
+Check(phResult.GetProperty("score").GetString() == "19/20" && phStore.Data.Position.DayCompleted
+      && phStore.Data.StudyLog[ReviewScheduler.Key(d0)].SessionDone && phResult.GetProperty("results").GetArrayLength() == 20,
+    "phone: finishing the session records answers and marks today's session done");
+Check(PhJson(phApi.Handle(PhReq("POST", "/api/check", """{"typed":" Take After. ","answer":"take after"}""", phCookie))).GetProperty("correct").GetBoolean()
+      && !PhJson(phApi.Handle(PhReq("POST", "/api/check", """{"typed":"take","answer":"take after"}""", phCookie))).GetProperty("correct").GetBoolean(),
+    "phone: typed answers are checked like on the computer");
+var phFound = PhJson(phApi.Handle(PhReq("GET", "/api/words", cookie: phCookie, query: new() { ["q"] = "truong hoc" })));
+var phAll = PhJson(phApi.Handle(PhReq("GET", "/api/words", cookie: phCookie, query: new() { ["skip"] = "50" })));
+Check(phFound.GetProperty("total").GetInt32() > 0 && phAll.GetProperty("total").GetInt32() == 980 && phAll.GetProperty("items").GetArrayLength() == 50
+      && phAll.GetProperty("items")[0].GetProperty("text").GetString() == AllWords.Find(phStore.Data, d0)[50].Word.Text,
+    "phone: all words searchable and paged by 50");
+var phAdd = PhJson(phApi.Handle(PhReq("POST", "/api/add", """{"text":"Serendipity.","meaning":"sự tình cờ may mắn","phonetic":"ˌserənˈdɪpəti","pos":"n","example":"","exampleMeaning":""}""", phCookie)));
+var phAgain = PhJson(phApi.Handle(PhReq("POST", "/api/add", """{"text":"serendipity","meaning":"x"}""", phCookie)));
+var phInbox = PhJson(phApi.Handle(PhReq("POST", "/api/add", """{"text":"quixotic","meaning":""}""", phCookie)));
+Check(phAdd.GetProperty("ok").GetBoolean() && QuickAdd.FindInLibrary(phStore.Data, "serendipity") is var (phPlan, _) && phPlan.Name == QuickAdd.PlanName
+      && !phAgain.GetProperty("ok").GetBoolean() && phInbox.GetProperty("ok").GetBoolean() && QuickAdd.IsWaiting(phStore.Data, "quixotic")
+      && PhJson(phApi.Handle(PhReq("GET", "/api/lookup", cookie: phCookie, query: new() { ["text"] = "Serendipity" }))).GetProperty("message").GetString()!.StartsWith("Đã có trong Từ của tôi"),
+    "phone: add a word with its meaning, to the AI list without one, never twice");
+Check(phApi.Handle(PhReq("POST", "/api/rate", "not json", phCookie)).Status == 400
+      && phApi.Handle(PhReq("POST", "/api/rate", $$"""{"id":"{{Guid.NewGuid()}}","learned":true}""", phCookie)).Status == 404
+      && phApi.Handle(PhReq("GET", "/nothing", cookie: phCookie)).Status == 404,
+    "phone: bad body 400, unknown word or page 404");
+
+// The socket server, over loopback, with a real HTTP client.
+using (var phServer = new PhoneServer(System.Net.IPAddress.Loopback, 0, r => Task.FromResult(phApi.Handle(r))))
+using (var phHttp = new System.Net.Http.HttpClient(new System.Net.Http.HttpClientHandler { AllowAutoRedirect = false, UseCookies = false }))
+{
+    var phBase = $"http://127.0.0.1:{phServer.Port}";
+    var phHttpLogin = phHttp.GetAsync($"{phBase}/?k={phKey}").Result;
+    var phGet = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, $"{phBase}/api/words?q=s%C3%A1ch&filter=all");
+    phGet.Headers.Add("Cookie", phCookie);
+    var phGetResponse = phHttp.Send(phGet);
+    var phPost = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, $"{phBase}/api/check")
+        { Content = new System.Net.Http.StringContent("""{"typed":"cà phê","answer":"cà phê"}""", System.Text.Encoding.UTF8, "application/json") };
+    phPost.Headers.Add("Cookie", phCookie);
+    phPost.Headers.Add("X-Voca", "1");
+    var phPostBody = phHttp.Send(phPost).Content.ReadAsStringAsync().Result;
+    Check((int)phHttpLogin.StatusCode == 302 && phHttpLogin.Headers.Location?.ToString() == "/"
+          && (int)phGetResponse.StatusCode == 200 && phGetResponse.Content.Headers.ContentType?.MediaType == "application/json"
+          && phPostBody.Contains("\"correct\":true"),
+        "phone server: redirect, GET with an accented query, POST with a UTF-8 body");
+    var phLocked = phHttp.GetAsync($"{phBase}/").Result;
+    Check((int)phLocked.StatusCode == 401 && phLocked.Content.ReadAsStringAsync().Result.Contains("quét mã QR"),
+        "phone server: without the cookie the page says how to connect");
+}
+Check(PhoneServer.ParseQuery("q=c%C3%A0+ph%C3%AA&x").Count == 2 && PhoneServer.ParseQuery("q=c%C3%A0+ph%C3%AA&x")["q"] == "cà phê",
+    "phone server: query strings decode + and %XX");
+var phTaken = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Any, 0);
+phTaken.Start();
+var phTakenPort = ((System.Net.IPEndPoint)phTaken.LocalEndpoint).Port;
+phStore.Update(d => { d.Settings.PhonePort = phTakenPort; d.Settings.PhoneAccess = true; });
+using (var phAccess = new PhoneAccess(phStore, f => Task.FromResult(f())))
+{
+    var phBusy = !phAccess.Running && phAccess.Error?.Contains(phTakenPort.ToString()) == true;
+    phTaken.Stop();
+    phStore.Update(d => d.Settings.PhonePort = 0); // any free port
+    var phStarted = phAccess.Running && phAccess.Error is null && phAccess.Port > 0 && phAccess.Link("1.2.3.4").EndsWith($"/?k={phKey}");
+    phStore.Update(d => d.Settings.PhoneAccess = false);
+    Check(phBusy && phStarted && !phAccess.Running, "phone access: a taken port is reported; follows the settings on and off");
+}
+Check(PhoneAccess.QrPng("http://192.168.1.5:8765/?k=abc").Take(4).SequenceEqual(new byte[] { 0x89, (byte)'P', (byte)'N', (byte)'G' }),
+    "phone access: QR code is a PNG");
+
+// ---------- phone: videos ----------
+var pvFolder = Path.Combine(Path.GetTempPath(), "voca-pv-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(pvFolder);
+var pvEp2 = Path.Combine(pvFolder, "Show E2.mp4");
+var pvEp10 = Path.Combine(pvFolder, "Show E10.mkv");
+File.WriteAllBytes(pvEp2, Enumerable.Range(0, 1000).Select(i => (byte)(i % 256)).ToArray());
+File.WriteAllBytes(pvEp10, [1, 2, 3]);
+File.WriteAllText(Path.Combine(pvFolder, "notes.txt"), "not a video");
+var pvLearning = phStore.Data.Plans.SelectMany(p => p.Words).First(w => !w.Learned && w.Text == "university");
+File.WriteAllText(Path.ChangeExtension(pvEp2, ".srt"),
+    "1\n00:00:01,000 --> 00:00:03,000\nThe university is near the serendipity cafe.\n\n2\n00:00:04,000 --> 00:00:06,500\nWe ate flabbergasting dumplings.\n");
+var pvKey = phStore.Data.Settings.PhoneKey;
+Check(phApi.Handle(PhReq("GET", "/api/videos", cookie: phCookie)) is var pvNone && PhJson(pvNone).GetProperty("folders").GetArrayLength() == 0,
+    "phone videos: none until a folder is known");
+phStore.Update(d => d.Settings.PhoneVideoFolders.Add(pvFolder));
+var pvList = PhJson(phApi.Handle(PhReq("GET", "/api/videos", cookie: phCookie)));
+var pvVideos = pvList.GetProperty("folders")[0].GetProperty("videos");
+var pvId = PhoneVideos.Id(pvEp2);
+Check(pvVideos.GetArrayLength() == 2 && pvVideos[0].GetProperty("id").GetString() == pvId && pvVideos[0].GetProperty("srt").GetBoolean()
+      && pvVideos[0].GetProperty("phone").GetBoolean() && !pvVideos[1].GetProperty("srt").GetBoolean() && !pvVideos[1].GetProperty("phone").GetBoolean(),
+    "phone videos: media files of an added folder in episode order (E2 before E10), with .srt and phone-friendly flags");
+var pvVideo = PhJson(phApi.Handle(PhReq("GET", "/api/video", cookie: phCookie, query: new() { ["id"] = pvId })));
+var pvParts = pvVideo.GetProperty("lines")[0].GetProperty("parts").EnumerateArray().ToList();
+string? PvMark(System.Text.Json.JsonElement part) => part.TryGetProperty("m", out var m) ? m.GetString() : null;
+Check(pvVideo.GetProperty("lines").GetArrayLength() == 2 && pvVideo.GetProperty("lines")[1].GetProperty("s").GetDouble() == 4
+      && string.Concat(pvParts.Select(p => p.GetProperty("t").GetString())) == "The university is near the serendipity cafe."
+      && pvParts.Any(p => PvMark(p) == "learning" && p.GetProperty("meaning").GetString() == pvLearning.Meaning)
+      && pvVideo.GetProperty("lines")[1].GetProperty("parts").EnumerateArray().Any(p => PvMark(p) == "new" && p.GetProperty("t").GetString() == "flabbergasting")
+      && pvVideo.GetProperty("next").GetProperty("id").GetString() == PhoneVideos.Id(pvEp10),
+    "phone videos: subtitle words marked like on the computer (learning with meaning, new), next episode");
+var pvSaved = PhJson(phApi.Handle(PhReq("POST", "/api/video/word", """{"text":"flabbergasting"}""", phCookie)));
+var pvAfter = PhJson(phApi.Handle(PhReq("GET", "/api/video", cookie: phCookie, query: new() { ["id"] = pvId })));
+Check(pvSaved.GetProperty("ok").GetBoolean() && QuickAdd.IsWaiting(phStore.Data, "flabbergasting")
+      && pvAfter.GetProperty("lines")[1].GetProperty("parts").EnumerateArray().Any(p => PvMark(p) == "waiting"),
+    "phone videos: a tapped new word goes to Từ của tôi and is then marked as saved");
+var pvWhole = phApi.Handle(PhReq("GET", "/media/" + pvId, cookie: phCookie));
+var pvPart = phApi.Handle(new PhoneRequest("GET", "/media/" + pvId, new Dictionary<string, string>(),
+    new Dictionary<string, string> { ["cookie"] = phCookie, ["range"] = "bytes=990-" }, ""));
+var pvBad = phApi.Handle(new PhoneRequest("GET", "/media/" + pvId, new Dictionary<string, string>(),
+    new Dictionary<string, string> { ["cookie"] = phCookie, ["range"] = "bytes=5000-" }, ""));
+Check(pvWhole.Status == 200 && pvWhole.File! == new FileBody(pvEp2, 0, 1000) && pvWhole.ContentType == "video/mp4"
+      && pvPart.Status == 206 && pvPart.File! == new FileBody(pvEp2, 990, 10) && pvPart.Headers!["Content-Range"] == "bytes 990-999/1000"
+      && pvBad.Status == 416,
+    "phone videos: the file is sent whole or by range (206), a range past the end is refused (416)");
+Check(PhoneVideos.Range("bytes=0-99", 1000) == (0, 100) && PhoneVideos.Range("bytes=-100", 1000) == (900, 100)
+      && PhoneVideos.Range("bytes=900-5000", 1000) == (900, 100) && PhoneVideos.Range("bytes=10-5", 1000) is null && PhoneVideos.Range("items=0-1", 1000) is null,
+    "phone videos: Range headers start-end, suffix, open end clipped, invalid");
+Check(phApi.Handle(PhReq("GET", "/media/0123456789abcdef", cookie: phCookie)).Status == 404
+      && phApi.Handle(PhReq("GET", "/media/" + pvId)).Status == 401,
+    "phone videos: files outside the known folders do not exist; no cookie, no video");
+var pvVtt = System.Text.Encoding.UTF8.GetString(phApi.Handle(PhReq("GET", $"/media/{pvId}.vtt", cookie: phCookie)).Body);
+Check(pvVtt.StartsWith("WEBVTT") && pvVtt.Contains("00:00:04.000 --> 00:00:06.500\nWe ate flabbergasting dumplings."),
+    "phone videos: subtitles also as WebVTT for the phone's own full-screen player");
+phApi.Handle(PhReq("POST", "/api/video/progress", $$"""{"id":"{{pvId}}","seconds":321.5,"length":1500}""", phCookie));
+var pvHistory = WatchProgress.Load(phFolder);
+var pvResumed = PhJson(phApi.Handle(PhReq("GET", "/api/video", cookie: phCookie, query: new() { ["id"] = pvId })));
+var pvContinue = PhJson(phApi.Handle(PhReq("GET", "/api/videos", cookie: phCookie))).GetProperty("continue");
+Check(pvHistory.Videos[0].Video == pvEp2 && pvHistory.Videos[0].Seconds == 321.5 && pvResumed.GetProperty("resume").GetDouble() == 321.5
+      && pvContinue.GetProperty("id").GetString() == pvId && pvContinue.GetProperty("text").GetString() == "Xem tiếp từ 5:21",
+    "phone videos: where the phone stopped is saved in watch.json, so both the phone and the computer continue there");
+phApi.Handle(PhReq("POST", "/api/video/progress", $$"""{"id":"{{pvId}}","seconds":1500,"length":1500}""", phCookie));
+Check(PhJson(phApi.Handle(PhReq("GET", "/api/videos", cookie: phCookie))).GetProperty("continue").GetProperty("id").GetString() == PhoneVideos.Id(pvEp10),
+    "phone videos: watched to the end → Xem tiếp offers the next episode");
+using (var pvServer = new PhoneServer(System.Net.IPAddress.Loopback, 0, r => Task.FromResult(phApi.Handle(r))))
+using (var pvHttp = new System.Net.Http.HttpClient())
+{
+    var pvGet = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, $"http://127.0.0.1:{pvServer.Port}/media/{pvId}");
+    pvGet.Headers.Add("Cookie", phCookie);
+    pvGet.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(100, 199);
+    var pvResponse = pvHttp.Send(pvGet);
+    var pvBytes = pvResponse.Content.ReadAsByteArrayAsync().Result;
+    Check((int)pvResponse.StatusCode == 206 && pvBytes.Length == 100 && pvBytes[0] == 100 && pvBytes[99] == 199
+          && pvResponse.Content.Headers.ContentRange?.ToString() == "bytes 100-199/1000",
+        "phone server: streams the asked bytes of a video");
+}
+Directory.Delete(pvFolder, recursive: true);
+
+// ---------- phone: the film folder ----------
+var fmRoot = Path.Combine(Path.GetTempPath(), "voca-films-" + Guid.NewGuid().ToString("N"));
+var fmNaruto = Path.Combine(fmRoot, "Naruto");
+Directory.CreateDirectory(Path.Combine(fmNaruto, "srt-goc"));
+Directory.CreateDirectory(Path.Combine(fmRoot, "Empty film"));
+string FmEp(int n) => Path.Combine(fmNaruto, $"Naruto_Shippuden_[English]_720P_S01_E{n:00}.mp4");
+foreach (var n in new[] { 10, 2, 1 }) File.WriteAllBytes(FmEp(n), [1]);
+File.WriteAllText(Path.ChangeExtension(FmEp(1), ".srt"), "1\n00:00:01,000 --> 00:00:02,000\nBelieve it.\n");
+File.WriteAllText(Path.Combine(fmNaruto, "srt-goc", "Naruto_Shippuden_[English]_720P_S01_E01.srt"), "old");
+File.WriteAllBytes(Path.Combine(fmRoot, "Inception.mp4"), [1]);
+Check(PhoneVideos.Labels([FmEp(1), FmEp(2), FmEp(10)]).SequenceEqual(["E01", "E02", "E10"])
+      && PhoneVideos.Labels(["C:\\x\\My_Movie.mp4"]).SequenceEqual(["My Movie"])
+      && PhoneVideos.Labels(["C:\\x\\Ep 1.mp4", "C:\\x\\Ep 10.mp4"]).SequenceEqual(["1", "10"]),
+    "films: episode labels drop the shared start of the file names");
+phStore.Update(d => d.Settings.FilmFolder = fmRoot);
+var fmList = PhJson(phApi.Handle(PhReq("GET", "/api/videos", cookie: phCookie)));
+var fmFilms = fmList.GetProperty("films").EnumerateArray().ToList();
+var fmNarutoFilm = fmFilms.Single(f => f.GetProperty("name").GetString() == "Naruto");
+Check(fmFilms.Count == 2 && fmFilms.Any(f => f.GetProperty("name").GetString() == "Inception" && f.GetProperty("count").GetInt32() == 1)
+      && fmNarutoFilm.GetProperty("count").GetInt32() == 3 && fmNarutoFilm.GetProperty("subtitles").GetInt32() == 1
+      && fmNarutoFilm.GetProperty("videos").EnumerateArray().Select(v => v.GetProperty("name").GetString()).SequenceEqual(["E01", "E02", "E10"])
+      && fmNarutoFilm.GetProperty("status").GetString() == "3 tập",
+    "films: each subfolder is a film named after it with its episodes in order; a loose video is a film; an empty folder is not listed");
+var fmE1 = PhoneVideos.Id(FmEp(1));
+var fmVideo = PhJson(phApi.Handle(PhReq("GET", "/api/video", cookie: phCookie, query: new() { ["id"] = fmE1 })));
+Check(fmVideo.GetProperty("name").GetString() == "Naruto · E01" && fmVideo.GetProperty("next").GetProperty("name").GetString() == "E02"
+      && fmVideo.GetProperty("lines").GetArrayLength() == 1,
+    "films: an episode plays as “Naruto · E01” with its .srt, and E02 comes next");
+phApi.Handle(PhReq("POST", "/api/video/progress", $$"""{"id":"{{fmE1}}","seconds":754,"length":1400}""", phCookie));
+var fmAfter = PhJson(phApi.Handle(PhReq("GET", "/api/videos", cookie: phCookie)));
+Check(fmAfter.GetProperty("films")[0].GetProperty("name").GetString() == "Naruto"
+      && fmAfter.GetProperty("films")[0].GetProperty("status").GetString() == "Đang xem E01 · 12:34"
+      && fmAfter.GetProperty("continue").GetProperty("name").GetString() == "Naruto · E01"
+      && !fmAfter.GetProperty("folders").EnumerateArray().Any(f => f.GetProperty("path").GetString() == fmNaruto),
+    "films: the film being watched comes first and says where; it is not listed again as a plain folder");
+phApi.Handle(PhReq("POST", "/api/video/progress", $$"""{"id":"{{fmE1}}","seconds":1400,"length":1400}""", phCookie));
+Check(PhJson(phApi.Handle(PhReq("GET", "/api/videos", cookie: phCookie))).GetProperty("films")[0].GetProperty("status").GetString() == "Tiếp theo: E02",
+    "films: after an episode is watched, the next one is named");
+phStore.Update(d => d.Settings.FilmFolder = "");
+Directory.Delete(fmRoot, recursive: true);
+
 Console.WriteLine(fails == 0 ? "\nALL PASSED" : $"\n{fails} FAILED");
 return fails == 0 ? 0 : 1;

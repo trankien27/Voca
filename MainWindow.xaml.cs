@@ -21,6 +21,8 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _topmostTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private readonly DispatcherTimer _revealTimer = new();
     private readonly NotifyIcon _tray;
+    /// <summary>Serves the phone page while "Học trên điện thoại" is on; its requests run on this window's thread.</summary>
+    private readonly PhoneAccess _phone;
     private readonly HashSet<string> _notified = [];
     private List<Word> _today = [];
     private HashSet<Word> _fresh = [];
@@ -65,12 +67,13 @@ public partial class MainWindow : Window
         _topmostTimer.Tick += (_, _) => { RefreshForNewDay(); UpdateVisibilityForFullScreen(); KeepAboveTaskbar(); MaybeNotify(); };
         // Any change saved by any window (library, session, stats) refreshes the taskbar word.
         _store.Changed += () => Dispatcher.Invoke(Reload);
+        _phone = new PhoneAccess(_store, handle => Dispatcher.InvokeAsync(handle).Task);
         Loaded += (_, _) => { Reload(); RestoreOrSetDefaultPosition(); KeepAboveTaskbar(); _topmostTimer.Start(); SayIfUpdated(); StartUpdateCheck(); };
         // Pause rotation while the detail popup is open so the word being read stays put.
         DetailPopup.Opened += (_, _) => _timer.Stop();
         DetailPopup.Closed += (_, _) => { _timer.Start(); UndoPanel.Visibility = Visibility.Collapsed; _undoWord = null; _undoPosition = null; };
         SourceInitialized += (_, _) => { HideFromAltTab(); RegisterQuickAddHotkey(); };
-        Closed += (_, _) => { _topmostTimer.Stop(); _updateTimer.Stop(); UnregisterQuickAddHotkey(); _tray.Dispose(); _speaker.Dispose(); };
+        Closed += (_, _) => { _topmostTimer.Stop(); _updateTimer.Stop(); UnregisterQuickAddHotkey(); _phone.Dispose(); _tray.Dispose(); _speaker.Dispose(); };
     }
 
     private readonly bool _hasEnglishVoice;
@@ -119,11 +122,7 @@ public partial class MainWindow : Window
         {
             var today = DateTime.Today;
             var dayBefore = CourseEngine.Current(_data) is var (planBefore, _) ? (Plan: planBefore, _data.Position.Day) : default;
-            var moved = CourseEngine.Advance(_data, today);
-            var cleaned = MistakeDays.Cleanup(_data, today);
-            var tidied = MistakeDays.Tidy(_data, DateTime.Now);
-            var repaired = CourseEngine.DropUnstudiedReviews(_data);
-            if (moved || cleaned || tidied || repaired) _store.Save();
+            if (CourseEngine.Upkeep(_data, DateTime.Now)) _store.Save();
             if (dayBefore.Plan is not null && !DetailPopup.IsOpen) AnnounceDayLearned(dayBefore.Plan, dayBefore.Day);
             var dateChanged = _loadedDate != today;
             var currentId = !dateChanged && _index < _today.Count ? _today[_index].Id : (Guid?)null;
@@ -871,7 +870,7 @@ public partial class MainWindow : Window
         new TestWindow(_store, null, null, null, Actions).Show();
     }
 
-    private AppActions Actions => new(Speak, _hasEnglishVoice, OpenStats, OpenMistakes, OpenPractice, () => _hotkeyReady);
+    private AppActions Actions => new(Speak, _hasEnglishVoice, OpenStats, OpenMistakes, OpenPractice, () => _hotkeyReady, _phone);
 
     // ---------------------------------- quick rating ----------------------------------
 

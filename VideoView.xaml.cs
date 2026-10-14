@@ -36,10 +36,11 @@ public partial class VideoView : System.Windows.Controls.UserControl
         DoneInk = Frozen(0x06, 0x76, 0x47), ErrorInk = Frozen(0xB4, 0x23, 0x18);
 
     /// <summary>A video of the queue and what happened to it.</summary>
-    private sealed class QueueItem(string path) : INotifyPropertyChanged
+    private sealed class QueueItem(string path, string? label = null) : INotifyPropertyChanged
     {
         public string Path { get; } = path;
-        public string Name => System.IO.Path.GetFileName(Path);
+        /// <summary>The file name, or for an episode of a film its short name and how far it was watched.</summary>
+        public string Name => label ?? System.IO.Path.GetFileName(Path);
         public bool HasSubtitles => File.Exists(SrtPathFor(Path));
         public string State { get; private set; } = "";
         public Brush StateInk { get; private set; } = MutedInk;
@@ -56,6 +57,11 @@ public partial class VideoView : System.Windows.Controls.UserControl
 
     private sealed record LineRow(string Time, string Text);
 
+    /// <summary>A film of the film folder, as listed in the "Phim" box.</summary>
+    private sealed record FilmRow(string Name, string Text, List<PhoneVideo> Episodes);
+
+    private bool _filmsLoading;
+
     private sealed class WordRow(VideoWord word)
     {
         public VideoWord Word { get; } = word;
@@ -70,17 +76,140 @@ public partial class VideoView : System.Windows.Controls.UserControl
         InitializeComponent();
         _store = store;
         ModelBox.ItemsSource = Transcriber.Models;
-        ModelBox.SelectedIndex = 0;
+        // A model already downloaded first, so nothing has to be fetched again.
+        ModelBox.SelectedItem = Transcriber.Models.FirstOrDefault(m => Transcriber.IsDownloaded(store.Folder, m)) ?? Transcriber.Models[0];
         QueueList.ItemsSource = _queue;
     }
 
     private void View_Loaded(object sender, RoutedEventArgs e)
     {
-        ShowContinue();
+        ShowContinue(); // also lists the films
         // Loaded fires again on every return to the tab; hook the window once.
         if (_host is not null) return;
         _host = Window.GetWindow(this);
         if (_host is not null) _host.Closing += (_, _) => _work?.Cancel();
+    }
+
+    // ---------------------------------- films ----------------------------------
+
+
+    /// <summary>Fills the "Phim" box from the film folder (keeping the film chosen); says how to set it up when empty.</summary>
+    private void LoadFilms()
+    {
+        _filmsLoading = true;
+        var chosen = (FilmBox.SelectedItem as FilmRow)?.Name;
+        var films = PhoneVideos.List(_store.Data, WatchProgress.Load(_store.Folder))
+            .Where(v => v.Film is not null).GroupBy(v => v.Group).Select(g => g.ToList())
+            .Select(episodes => new FilmRow(episodes[0].Film!, $"{episodes[0].Film}  ·  {FilmSummary(episodes)}", episodes)).ToList();
+        if (films.Count == 0)
+        {
+            var folder = _store.Data.Settings.FilmFolder;
+            FilmBox.ItemsSource = new[] { new FilmRow("", folder.Length == 0 ? "Chưa chọn thư mục phim — bấm “Thư mục phim…”" : $"{folder} chưa có phim nào (mỗi phim là một thư mục con)", []) };
+            FilmBox.SelectedIndex = 0;
+            FilmBox.IsEnabled = false;
+        }
+        else
+        {
+            FilmBox.ItemsSource = films;
+            FilmBox.SelectedItem = films.FirstOrDefault(f => f.Name == chosen);
+            FilmBox.IsEnabled = _work is null;
+        }
+        _filmsLoading = false;
+        ShowFilmHint();
+    }
+
+    private void ShowFilmHint() => FilmHint.Visibility = FilmBox.SelectedItem is null ? Visibility.Visible : Visibility.Collapsed;
+
+    private static string FilmSummary(List<PhoneVideo> episodes)
+    {
+        var watched = episodes.Count(v => v.Progress?.Finished == true);
+        var subtitled = episodes.Count(v => v.Srt is not null);
+        return episodes.Count == 1
+            ? subtitled == 1 ? "có phụ đề" : "chưa có phụ đề"
+            : $"{episodes.Count} tập · {subtitled} có phụ đề" + (watched > 0 ? $" · đã xem {watched}" : "");
+    }
+
+    /// <summary>An episode's line in the list: "E04 · đang xem 12:30", "E01 · đã xem ✓".</summary>
+    private static string EpisodeText(PhoneVideo episode) =>
+        episode.Label + (episode.Progress is not { } p ? ""
+            : p.Finished ? "  ·  đã xem ✓"
+            : $"  ·  đang xem {VideoPlayerWindow.Clock(TimeSpan.FromSeconds(p.Seconds))}");
+
+    /// <summary>A film chosen: its episodes fill the list (subtitled ones marked); the one to watch next is opened.</summary>
+    private void FilmBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        ShowFilmHint();
+        if (_filmsLoading || _work is not null || FilmBox.SelectedItem is not FilmRow { Episodes.Count: > 0 } film) return;
+        _queue.Clear();
+        foreach (var episode in film.Episodes) _queue.Add(new QueueItem(episode.Path, EpisodeText(episode)));
+        RedoBox.IsChecked = false;
+        ShowQueueStates();
+        QueuePanel.Visibility = Visibility.Visible;
+        // Where to pick up: the episode left half-watched, else the one after the last watched, else the first.
+        var last = film.Episodes.Where(v => v.Progress is not null).MaxBy(v => v.Progress!.WatchedAt);
+        var at = last is null ? 0 : film.Episodes.IndexOf(last) + (last.Progress!.Finished ? 1 : 0);
+        QueueList.SelectedIndex = Math.Clamp(at, 0, _queue.Count - 1);
+        QueueList.ScrollIntoView(QueueList.SelectedItem);
+        var missing = _queue.Count(i => !i.HasSubtitles);
+        Status($"{film.Name}: {_queue.Count} tập" + (missing > 0 ? $", {missing} tập chưa có phụ đề — bấm “Tạo phụ đề” để tạo lần lượt" : ", tập nào cũng có phụ đề")
+               + ". Bấm một tập để xem phụ đề, rồi “▶ Xem video có phụ đề”.");
+        UpdateButtons();
+    }
+
+    /// <summary>
+    /// "Tạo phụ đề cả thư mục": every episode of every film without an .srt goes into the list (the film being
+    /// watched first) and is recognised one after another, as when several videos are picked.
+    /// </summary>
+    private void ScanFilms_Click(object sender, RoutedEventArgs e)
+    {
+        if (_work is not null) return;
+        var history = WatchProgress.Load(_store.Folder);
+        var films = PhoneVideos.List(_store.Data, history).Where(v => v.Film is not null).GroupBy(v => v.Group).ToList();
+        if (films.Count == 0)
+        {
+            Status(_store.Data.Settings.FilmFolder.Length == 0 ? "Chưa chọn thư mục phim: bấm “Thư mục phim…”." : "Thư mục phim chưa có phim nào (mỗi phim là một thư mục con).");
+            return;
+        }
+        var missing = films
+            .OrderByDescending(g => g.Max(v => v.Progress?.WatchedAt ?? DateTime.MinValue))
+            .SelectMany(g => g).Where(v => v.Srt is null).ToList();
+        if (missing.Count == 0)
+        {
+            Status($"Đã quét {films.Count} phim: tập nào cũng có phụ đề.");
+            return;
+        }
+        _filmsLoading = true;
+        FilmBox.SelectedIndex = -1;
+        _filmsLoading = false;
+        _queue.Clear();
+        foreach (var episode in missing)
+            _queue.Add(new QueueItem(episode.Path, episode.Film == episode.Label ? episode.Film : $"{episode.Film} · {episode.Label}"));
+        RedoBox.IsChecked = false;
+        ShowQueueStates();
+        QueuePanel.Visibility = Visibility.Visible;
+        Status($"Đã quét {films.Count} phim: {missing.Count} tập chưa có phụ đề. Đang tạo lần lượt từng tập — bấm “Hủy” để dừng, lần sau bấm lại sẽ làm tiếp các tập còn thiếu.");
+        Run_Click(sender, e);
+    }
+
+    private void FilmFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (PickFilmFolder(_host, _store) is null) return;
+        LoadFilms();
+        if (FilmBox.IsEnabled && FilmBox.Items.Count > 0) FilmBox.SelectedIndex = 0;
+    }
+
+    /// <summary>Asks for the film folder (starting at the current one, or D:\Film) and saves it; null when cancelled.</summary>
+    internal static string? PickFilmFolder(Window? owner, Store store)
+    {
+        var current = store.Data.Settings.FilmFolder;
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "Chọn thư mục phim (mỗi thư mục con là một phim, tên thư mục là tên phim)",
+            InitialDirectory = Directory.Exists(current) ? current : Directory.Exists(@"D:\Film") ? @"D:\Film" : ""
+        };
+        if (dialog.ShowDialog(owner) != true) return null;
+        store.Update(d => d.Settings.FilmFolder = dialog.FolderName);
+        return dialog.FolderName;
     }
 
     // ---------------------------------- subtitles ----------------------------------
@@ -248,6 +377,7 @@ public partial class VideoView : System.Windows.Controls.UserControl
 
     private void ShowContinue()
     {
+        if (IsLoaded) LoadFilms();
         var next = WatchProgress.Continue(WatchProgress.Load(_store.Folder));
         ContinueButton.Visibility = next is null ? Visibility.Collapsed : Visibility.Visible;
         if (next is null) return;
@@ -282,7 +412,7 @@ public partial class VideoView : System.Windows.Controls.UserControl
     private async void Run_Click(object sender, RoutedEventArgs e)
     {
         if (ModelBox.SelectedItem is not SpeechModel model) return;
-        var queue = _queue.Count > 1;
+        var queue = _queue.Count > 0;
         if (!queue && _mediaPath is null) return;
         if (queue && Pending.Count == 0)
         {
@@ -467,6 +597,7 @@ public partial class VideoView : System.Windows.Controls.UserControl
         Progress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         CancelButton.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         PickButton.IsEnabled = ModelBox.IsEnabled = RedoBox.IsEnabled = !busy;
+        if (!busy) LoadFilms(); else FilmBox.IsEnabled = false;
         UpdateButtons();
     }
 
@@ -474,7 +605,8 @@ public partial class VideoView : System.Windows.Controls.UserControl
     {
         var busy = _work is not null;
         var isMedia = _mediaPath is not null && !_mediaPath.EndsWith(".srt", StringComparison.OrdinalIgnoreCase);
-        RunButton.IsEnabled = !busy && (_queue.Count > 1 || isMedia);
+        RunButton.IsEnabled = !busy && (_queue.Count > 0 || isMedia);
+        ScanFilmsButton.IsEnabled = !busy;
         PlayVideoButton.IsEnabled = _videoPath is not null && !busy && _lines.Count > 0;
         ReadButton.IsEnabled = !busy;
         SaveButton.IsEnabled = isMedia && !busy && _lines.Count > 0;

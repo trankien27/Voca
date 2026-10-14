@@ -110,6 +110,9 @@ public static partial class WatchProgress
 
     private static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Episode order of file paths: "Ep 2" before "Ep 10".</summary>
+    public static IComparer<string> EpisodeOrder => NaturalOrder.Instance;
+
     /// <summary>File names compared with their numbers as numbers: "Ep 2" before "Ep 10".</summary>
     private sealed partial class NaturalOrder : IComparer<string>
     {
