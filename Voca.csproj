@@ -9,7 +9,7 @@
     <AssemblyName>Voca</AssemblyName>
     <RootNamespace>Voca</RootNamespace>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <Version>2.20.5</Version>
+    <Version>2.20.6</Version>
     <Product>Voca</Product>
   </PropertyGroup>
   <ItemGroup>

@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using Voca.Services;
 using Brush = System.Windows.Media.Brush;
@@ -22,6 +23,8 @@ namespace Voca;
 /// every video, which also lets the learner switch the audio track of a film with several (English / Japanese).
 /// The offer to download it appears when Windows cannot play a video or when the video has several audio tracks.
 /// Subtitles stored inside an .mkv can be picked as the line shown, instead of the .srt.
+/// The control bar lies over the bottom of the video and fades out, with the cursor, when the mouse rests while
+/// the video plays; moving the mouse (or a key) brings it back, and it stays while paused.
 /// </summary>
 public partial class VideoPlayerWindow : Window
 {
@@ -41,9 +44,12 @@ public partial class VideoPlayerWindow : Window
     private readonly DispatcherTimer _toastTimer = new() { Interval = TimeSpan.FromSeconds(3) };
     /// <summary>Saves the position while playing, so a crash or power cut loses a few seconds at most.</summary>
     private readonly DispatcherTimer _saveTimer = new() { Interval = TimeSpan.FromSeconds(5) };
+    /// <summary>Hides the control bar once the mouse has rested this long.</summary>
+    private readonly DispatcherTimer _idleTimer = new() { Interval = TimeSpan.FromSeconds(2.5) };
     private WordMarker _marker;
     private SubtitleLine? _shown;
-    private bool _playing, _seeking, _pausedByHover, _fullScreen, _finished, _listing, _audioListed, _closed;
+    private bool _playing, _seeking, _pausedByHover, _fullScreen, _finished, _listing, _audioListed, _closed, _controlsHidden;
+    private System.Windows.Point _mouse;
     /// <summary>Where to jump once the video is open (where it was left off last time).</summary>
     private TimeSpan _start;
     private WindowState _stateBeforeFullScreen;
@@ -70,6 +76,7 @@ public partial class VideoPlayerWindow : Window
         _tick.Tick += (_, _) => Update();
         _toastTimer.Tick += (_, _) => { Toast.Visibility = Visibility.Collapsed; _toastTimer.Stop(); };
         _saveTimer.Tick += (_, _) => SaveProgress();
+        _idleTimer.Tick += (_, _) => HideControls();
         if (!VlcRuntime.IsInstalled(store.Folder) || !StartVlc()) Media.Source = new Uri(videoPath);
         ListSubtitles();
         // MediaElement only opens its source once it is part of a shown window.
@@ -97,6 +104,7 @@ public partial class VideoPlayerWindow : Window
         PlayButton.Content = "⏸";
         _tick.Start();
         _saveTimer.Start();
+        ShowControls();
     }
 
     private void Pause()
@@ -107,6 +115,7 @@ public partial class VideoPlayerWindow : Window
         _saveTimer.Stop();
         PlayButton.Content = "▶";
         Update();
+        ShowControls();
     }
 
     private void TogglePlay()
@@ -128,6 +137,7 @@ public partial class VideoPlayerWindow : Window
         var length = Length ?? TimeSpan.MaxValue;
         Position = time < TimeSpan.Zero ? TimeSpan.Zero : time > length ? length : time;
         Update();
+        ShowControls();
     }
 
     private void Media_Opened(object sender, RoutedEventArgs e) => Opened();
@@ -461,6 +471,51 @@ public partial class VideoPlayerWindow : Window
     private void Window_SizeChanged(object sender, SizeChangedEventArgs e) =>
         SubtitleText.FontSize = Math.Clamp(ActualHeight / 24, 18, 44);
 
+    // ---------------------------------- control bar ----------------------------------
+
+    private void Window_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        // WPF also raises MouseMove when the cursor or the layout changes under a still mouse.
+        var at = e.GetPosition(this);
+        if (at == _mouse) return;
+        _mouse = at;
+        ShowControls();
+    }
+
+    /// <summary>Shows the control bar and the cursor, and starts counting again until they hide.</summary>
+    private void ShowControls()
+    {
+        _idleTimer.Stop();
+        _idleTimer.Start();
+        if (!_controlsHidden) return;
+        _controlsHidden = false;
+        ControlBar.IsHitTestVisible = true;
+        Cursor = null;
+        FadeControls();
+    }
+
+    /// <summary>Hides the control bar and the cursor while the video plays, unless the learner is using the bar.</summary>
+    private void HideControls()
+    {
+        _idleTimer.Stop();
+        if (_controlsHidden || !_playing || _seeking || ControlBar.IsMouseOver || VlcPanel.Visibility == Visibility.Visible
+            || SpeedBox.IsDropDownOpen || AudioBox.IsDropDownOpen || SubtitleBox.IsDropDownOpen) return;
+        _controlsHidden = true;
+        ControlBar.IsHitTestVisible = false;
+        Cursor = System.Windows.Input.Cursors.None;
+        FadeControls();
+    }
+
+    private void FadeControls() => ControlBar.BeginAnimation(OpacityProperty,
+        new DoubleAnimation(_controlsHidden ? 0 : 1, TimeSpan.FromMilliseconds(_controlsHidden ? 300 : 120)));
+
+    /// <summary>
+    /// The subtitle stays just above the control bar, shown or not: were it to move with the bar, it could slide under
+    /// a still mouse and pause the video (hover) each time the bar hides.
+    /// </summary>
+    private void ControlBar_SizeChanged(object sender, SizeChangedEventArgs e) =>
+        SubtitlePanel.Margin = new Thickness(40, 0, 40, ControlBar.ActualHeight + 12);
+
     // ---------------------------------- controls ----------------------------------
 
     private void Play_Click(object sender, RoutedEventArgs e) => TogglePlay();
@@ -537,6 +592,7 @@ public partial class VideoPlayerWindow : Window
             default: return;
         }
         e.Handled = true;
+        ShowControls();
     }
 
     private void Window_Closed(object? sender, EventArgs e)
@@ -547,6 +603,7 @@ public partial class VideoPlayerWindow : Window
         _saveTimer.Stop();
         _tick.Stop();
         _toastTimer.Stop();
+        _idleTimer.Stop();
         _vlc?.Dispose();
         Media.Close();
     }
