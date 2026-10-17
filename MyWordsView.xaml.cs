@@ -17,7 +17,11 @@ public partial class MyWordsView : System.Windows.Controls.UserControl
     private readonly AppActions _actions;
     private List<Word> _justImported = [];
 
-    private sealed record WaitingRow(string Text, string Added);
+    private sealed record WaitingRow(string Text, string Added, string Context)
+    {
+        public Visibility ContextVisibility => Context.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public string? ContextTip => Context.Length > 0 ? $"Câu gặp từ: {Context}" : null;
+    }
 
     public MyWordsView(Store store, AppActions actions)
     {
@@ -41,7 +45,7 @@ public partial class MyWordsView : System.Windows.Controls.UserControl
     {
         var inbox = _store.Data.Inbox.OrderByDescending(i => i.AddedAt).ToList();
         WaitingTitle.Text = $"Đang chờ điền nghĩa ({inbox.Count})";
-        WaitingList.ItemsSource = inbox.Select(i => new WaitingRow(i.Text, i.AddedAt.ToString("HH:mm dd/MM"))).ToList();
+        WaitingList.ItemsSource = inbox.Select(i => new WaitingRow(i.Text, i.AddedAt.ToString("HH:mm dd/MM"), i.Context)).ToList();
         CopyPromptButton.IsEnabled = inbox.Count > 0;
     }
 
@@ -80,13 +84,16 @@ public partial class MyWordsView : System.Windows.Controls.UserControl
 
     private void CopyPrompt_Click(object sender, RoutedEventArgs e)
     {
-        var words = _store.Data.Inbox.OrderBy(i => i.AddedAt).Select(i => i.Text).ToList();
+        var words = _store.Data.Inbox.OrderBy(i => i.AddedAt).ToList();
         if (words.Count == 0) return;
-        var prompt = QuickAdd.BuildPrompt(words, DateTime.Now);
+        var prompt = QuickAdd.BuildPrompt(words);
+        var count = Math.Min(words.Count, QuickAdd.MaxPromptWords);
         try
         {
             System.Windows.Clipboard.SetText(prompt);
-            StatusText.Text = $"Đã sao chép prompt cho {words.Count} từ. Dán vào AI (Ctrl+V), rồi copy toàn bộ câu trả lời dán vào ô bên phải.";
+            StatusText.Text = $"Đã sao chép prompt cho {count} từ" +
+                              (words.Count > count ? $" (trong {words.Count} từ đang chờ — nhập xong bấm lại để làm tiếp phần còn lại)" : "") +
+                              ". Dán vào AI (Ctrl+V), copy câu trả lời rồi bấm Dán kết quả.";
         }
         catch (Exception)
         {
@@ -104,7 +111,20 @@ public partial class MyWordsView : System.Windows.Controls.UserControl
         catch (Exception ex) { StatusText.Text = $"Không mở được trình duyệt: {ex.Message}"; }
     }
 
-    private void Import_Click(object sender, RoutedEventArgs e)
+    /// <summary>Puts the AI's answer from the clipboard in the box and imports it in one click.</summary>
+    private void PasteAnswer_Click(object sender, RoutedEventArgs e)
+    {
+        string text;
+        try { text = System.Windows.Clipboard.ContainsText() ? System.Windows.Clipboard.GetText() : ""; }
+        catch (Exception) { StatusText.Text = "Không đọc được clipboard (đang bận). Bấm vào ô bên trên, Ctrl+V rồi bấm Nhập nội dung trong ô."; return; }
+        if (text.Trim().Length == 0) { StatusText.Text = "Clipboard đang trống — hãy copy câu trả lời của AI trước."; return; }
+        AnswerBox.Text = text;
+        Import();
+    }
+
+    private void Import_Click(object sender, RoutedEventArgs e) => Import();
+
+    private void Import()
     {
         if (AnswerBox.Text.Trim().Length == 0) { StatusText.Text = "Dán câu trả lời của AI vào ô trước."; return; }
         MyWordsImport? result = null;
@@ -112,13 +132,14 @@ public partial class MyWordsView : System.Windows.Controls.UserControl
         if (result!.Errors.Count > 0)
         {
             ImportResult.Foreground = System.Windows.Media.Brushes.Firebrick;
-            ImportResult.Text = "Chưa nhập được: " + string.Join(" ", result.Errors.Take(3)) + " Sửa trong ô rồi bấm Nhập lại.";
+            ImportResult.Text = "Chưa nhập được: " + string.Join(" ", result.Errors.Take(3)) + " Sửa trong ô rồi bấm Nhập nội dung trong ô.";
             return;
         }
         _justImported = result.Added;
         ImportResult.Foreground = (System.Windows.Media.Brush)FindResource("Ink");
         ImportResult.Text = (result.Added.Count > 0 ? $"✓ Đã thêm {result.Added.Count} từ vào “{QuickAdd.PlanName}” (ngày {result.Day})." : "Không có từ mới để thêm.") +
-                            (result.SkippedExisting.Count > 0 ? $" Bỏ qua {result.SkippedExisting.Count} từ đã có trong thư viện: {string.Join(", ", result.SkippedExisting)}." : "");
+                            (result.SkippedExisting.Count > 0 ? $" Bỏ qua {result.SkippedExisting.Count} từ đã có trong thư viện: {string.Join(", ", result.SkippedExisting)}." : "") +
+                            (result.StillWaiting.Count > 0 ? $"\nVẫn chờ {result.StillWaiting.Count} từ: {string.Join("; ", result.StillWaiting)}." : "");
         PracticeButton.Visibility = result.Added.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         PracticeButton.Content = $"▶ Học ngay {result.Added.Count} từ";
         if (result.Added.Count > 0) AnswerBox.Clear();

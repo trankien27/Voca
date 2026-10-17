@@ -228,6 +228,9 @@ public sealed class InboxWord
 
     public string Text { get; set; } = "";
     public DateTime AddedAt { get; set; }
+
+    /// <summary>The subtitle sentence the word was saved from ("" when added by hand), so the AI can pick that sense.</summary>
+    public string Context { get; set; } = "";
 }
 
 public sealed class ReviewState

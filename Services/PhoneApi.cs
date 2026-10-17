@@ -31,7 +31,7 @@ public sealed class PhoneApi(Store store, Func<DateTime>? clock = null)
     private sealed record CheckBody(string Typed, string Answer);
     private sealed record AddBody(string Text, string Meaning, string Phonetic, string Pos, string Example, string ExampleMeaning);
     private sealed record ProgressBody(string Id, double Seconds, double Length);
-    private sealed record WordBody(string Text);
+    private sealed record WordBody(string Text, string? Line = null);
 
     /// <summary>The videos listed last time, by id, so the many requests of one playing video do not list the folders again.</summary>
     private Dictionary<string, PhoneVideo> _videos = [];
@@ -595,7 +595,7 @@ public sealed class PhoneApi(Store store, Func<DateTime>? clock = null)
     private object SaveVideoWord(WordBody body)
     {
         QuickAddResult? result = null;
-        store.Update(d => result = QuickAdd.Add(d, body.Text, _clock()));
+        store.Update(d => result = QuickAdd.Add(d, body.Text, _clock(), body.Line));
         return new { ok = result!.Added, message = QuickAdd.Describe(result, body.Text) };
     }
 }

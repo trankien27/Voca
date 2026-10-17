@@ -180,8 +180,9 @@ Check(translated.Words[1].ExampleMeaning == "Chuyến bay của chúng tôi bị
 var withMeaning = new Plan { Name = "T", Words = [new Word { Text = "delay", Meaning = "sự chậm trễ", Example = "A | delay.", ExampleMeaning = "Một sự | chậm trễ." }] };
 var withMeaningBack = PlanFormat.Read(PlanFormat.ToMarkdown(withMeaning)).Plan!.Words[0];
 Check(withMeaningBack.ExampleMeaning == "Một sự | chậm trễ." && withMeaningBack.Meaning == "sự chậm trễ" && withMeaningBack.Example == "A | delay."
-      && new[] { prompt, Subtitles.BuildPrompt("V", [new VideoWord("x", 1, "x")], 20), QuickAdd.BuildPrompt(["x"], d0) }
-          .All(p => p.Contains(PlanFormat.TableHeader) && p.Contains("Dịch ví dụ: bản dịch tiếng Việt") && !p.Contains("| Ví dụ |\n")),
+      && new[] { prompt, Subtitles.BuildPrompt("V", [new VideoWord("x", 1, "x")], 20) }
+          .All(p => p.Contains(PlanFormat.TableHeader) && p.Contains("Dịch ví dụ: bản dịch tiếng Việt") && !p.Contains("| Ví dụ |\n"))
+      && QuickAdd.BuildPrompt([new InboxWord { Text = "x" }]).Contains("\"exampleMeaning\": bản dịch tiếng Việt"),
     "export → import keeps the translation (also for a word without phonetic); every AI prompt (topic, video, my words) asks for it");
 
 // ---------- storage ----------
@@ -490,9 +491,9 @@ Check(!dupe.Added && dupe.ExistingPlan == mw.Plans[1] && dupe.ExistingWord == ex
 Check(QuickAdd.Add(mw, "serendipity", d0).Added && QuickAdd.Add(mw, "Serendipity", d0) is { Added: false, AlreadyWaiting: true }
       && QuickAdd.Add(mw, "jaywalk", d0).Added && QuickAdd.Add(mw, "lol 123 http://x", d0).Invalid && mw.Inbox.Count == 2,
     "my words: new words wait once; repeats and junk are refused");
-var myPrompt = QuickAdd.BuildPrompt(mw.Inbox.Select(i => i.Text).ToList(), d0);
-Check(myPrompt.Contains("serendipity, jaywalk") && myPrompt.Contains("# Tên bộ từ: Từ của tôi") && myPrompt.Contains("| STT | Từ |"),
-    "my words: the prompt lists the waiting words and the form");
+var myPrompt = QuickAdd.BuildPrompt(mw.Inbox);
+Check(myPrompt.Contains("1. serendipity" + Environment.NewLine) && myPrompt.Contains("2. jaywalk" + Environment.NewLine) && myPrompt.Contains("```json") && myPrompt.Contains("Trả về đúng 2 mục"),
+    "my words: the prompt lists the waiting words in order and asks for a JSON block");
 var answer = $"""
     ```markdown
     # Tên bộ từ: Từ của tôi
@@ -520,6 +521,77 @@ MistakeDays.ApplyPractice(mw, [(imported.Added[0], true), (imported.Added[1], fa
 Check(imported.Added.All(w => w.IntroducedOn == d0) && imported.Added[1].Review!.Due == d0.AddDays(1)
       && mw.MistakeLists.Single().Title == MistakeDays.SessionTitle(d0),
     "my words: studying them starts reviews; a wrong one joins today's mistake list");
+
+// ---- my words: dictionary-style prompt with the subtitle sentence, and a forgiving reader of the AI's answer ----
+Check(QuickAdd.ContextOf("- I was tired. Then I postponed the trip!\nSee you.", "postponed") == "Then I postponed the trip!"
+      && QuickAdd.ContextOf("We met. It was pure Serendipity.", "serendipity") == "It was pure Serendipity."
+      && QuickAdd.ContextOf("No word here", "zebra") == "No word here" && QuickAdd.ContextOf(null, "x") == ""
+      && QuickAdd.ContextOf(string.Join(" ", Enumerable.Repeat("blah", 80)) + " zebra " + string.Join(" ", Enumerable.Repeat("blah", 80)), "zebra") is var cut
+      && cut.Length <= 202 && cut.Contains("zebra") && cut.StartsWith('…') && cut.EndsWith('…'),
+    "my words: the context is the sentence of the subtitle line that holds the word, cut around it when long");
+var cx = new AppData();
+QuickAdd.Add(cx, "postponed", d0, "- I was tired. Then I postponed the trip!");
+QuickAdd.Add(cx, "jaywalk", d0.AddMinutes(1));
+QuickAdd.Add(cx, "Jaywalk", d0.AddMinutes(2), "Don't jaywalk here.");
+QuickAdd.Add(cx, "postponed", d0.AddMinutes(3), "Another line with postponed.");
+Check(cx.Inbox.Count == 2 && cx.Inbox[0].Context == "Then I postponed the trip!" && cx.Inbox[1].Context == "Don't jaywalk here.",
+    "my words: a word saved from a subtitle keeps its sentence; saving it again only fills a missing one");
+var dictPrompt = QuickAdd.BuildPrompt(cx.Inbox);
+Check(dictPrompt.Contains("1. postponed — câu gặp từ: \"Then I postponed the trip!\"") && dictPrompt.Contains("2. jaywalk — câu gặp từ:")
+      && new[] { "Cambridge", "Oxford Learner's", "Longman", "IPA", "Anh-Anh", "\"headword\"", "\"contextMeaning\"", "Không bịa", "\"meaning\": \"\"", "```json" }.All(dictPrompt.Contains),
+    "my words: the prompt asks for Cambridge IPA, the most common dictionary sense (and the sense in the sentence), no guessing, one JSON block");
+var manyWaiting = new AppData();
+for (var i = 0; i < QuickAdd.MaxPromptWords + 5; i++) manyWaiting.Inbox.Add(new InboxWord { Text = "word" + (char)('a' + i % 26) + (char)('a' + i / 26) });
+var manyPrompt = QuickAdd.BuildPrompt(manyWaiting.Inbox);
+Check(manyPrompt.Contains($"\n{QuickAdd.MaxPromptWords}. ") && !manyPrompt.Contains($"\n{QuickAdd.MaxPromptWords + 1}. ") && manyPrompt.Contains($"đúng {QuickAdd.MaxPromptWords} mục"),
+    "my words: one prompt holds at most MaxPromptWords words, the rest wait for the next");
+
+const string entryA = """{"word": "postponed", "headword": "postpone", "ipa": "pəʊstˈpəʊn", "pos": "Verb", "meaning": "hoãn lại", "contextMeaning": "", "example": "They postponed the match.", "exampleMeaning": "Họ hoãn trận đấu.", "note": ""}""";
+const string entryB = """{"word": "jaywalk", "headword": "", "ipa": "/ˈdʒeɪ.wɔːk/", "pos": "verb", "meaning": "băng qua đường ẩu", "contextMeaning": "", "example": "Don't jaywalk.", "exampleMeaning": "Đừng băng qua đường ẩu.", "note": ""}""";
+var fenced = QuickAdd.ReadAnswer($"Chắc chắn rồi! Đây là kết quả:\n```json\n[\n  {entryA},\n  {entryB},\n]\n```\nHy vọng hữu ích [1].");
+Check(fenced.Errors.Count == 0 && fenced.Words.Select(w => w.Asked).SequenceEqual(["postponed", "jaywalk"])
+      && fenced.Words[0].Word is { Text: "postpone", Phonetic: "/pəʊstˈpəʊn/", PartOfSpeech: "v", Meaning: "hoãn lại", ExampleMeaning: "Họ hoãn trận đấu." },
+    "my words answer: read inside ```json after a greeting, trailing comma and text after it ignored; headword saved, IPA in /../, pos shortened");
+var split = QuickAdd.ReadAnswer($"Phần 1:\n```json\n[{entryA}]\n```\nPhần 2:\n```json\n[{entryB}]\n```");
+var bare = QuickAdd.ReadAnswer($"[ // two words\n{entryA}, {entryB}]");
+var wrapped = QuickAdd.ReadAnswer($$"""{"words": [{{entryA}}, {{entryB}}]}""");
+var cutOff = QuickAdd.ReadAnswer($"```json\n[\n{entryA},\n{entryB[..40]}");
+var curly = QuickAdd.ReadAnswer("[{“word”: “jaywalk”, “pos”: “noun, verb”, “meaning”: [“băng qua đường ẩu”, “đi ẩu”]}]");
+Check(split.Words.Count == 2 && bare.Words.Count == 2 && wrapped.Words.Count == 2 && cutOff.Words.Select(w => w.Asked).SequenceEqual(["postponed"])
+      && curly.Words.Single().Word is { PartOfSpeech: "n, v", Meaning: "băng qua đường ẩu, đi ẩu" },
+    "my words answer: several blocks, no fence with a comment, {\"words\": [...]}, an answer cut short, curly quotes and lists all read");
+Check(QuickAdd.ShortPartOfSpeech("Phrasal verb") == "phr v" && QuickAdd.ShortPartOfSpeech("noun (countable)") == "n" && QuickAdd.ShortPartOfSpeech("adj.") == "adj"
+      && QuickAdd.ShortPartOfSpeech("danh từ / động từ") == "n, v",
+    "my words answer: parts of speech in words (English or Vietnamese) become Voca's short forms");
+Check(QuickAdd.ReadAnswer("Xin lỗi, tôi không thể giúp.").Errors.Count == 1 && QuickAdd.ReadAnswer(dictPrompt).Errors.Count == 1
+      && QuickAdd.ReadAnswer("  ").Errors.Count == 1,
+    "my words answer: text without entries (or the prompt pasted back) is refused");
+
+var ai = new AppData();
+SeedData.EnsureSeeded(ai);
+var known = ai.Plans[0].Words[0].Text;
+foreach (var waitingText in new[] { "postponed", "jaywalk", "flummoxed", "grnadma" }) QuickAdd.Add(ai, waitingText, d0);
+ai.Inbox.Add(new InboxWord { Text = known, AddedAt = d0 }); // waited before the library got it
+var aiAnswer = $$"""
+    Here you go:
+    ```json
+    [
+      {{entryA}},
+      {"word": "Jaywalk", "ipa": "ˈdʒeɪwɔːk", "pos": "v", "meaning": "băng qua đường ẩu", "contextMeaning": "đi bộ sai luật", "example": "Don't jaywalk.", "exampleMeaning": "Đừng băng qua đường ẩu."},
+      {"word": "grnadma", "headword": "", "ipa": "", "pos": "", "meaning": "", "contextMeaning": "", "example": "", "exampleMeaning": "", "note": "viết sai, đúng là grandma"},
+      {"word": "{{known}}", "ipa": "/x/", "pos": "n", "meaning": "đã có", "example": "x"}
+    ]
+    ```
+    """;
+var aiImport = QuickAdd.Import(ai, aiAnswer, d0.AddHours(9));
+var aiPlan = ai.Plans.Single(p => p.Name == QuickAdd.PlanName);
+Check(aiImport.Errors.Count == 0 && aiImport.Added.Select(w => w.Text).SequenceEqual(["postpone", "jaywalk"]) && aiPlan.Words.Count == 2
+      && aiImport.Added[1] is { Phonetic: "/ˈdʒeɪwɔːk/", Meaning: "băng qua đường ẩu; trong câu: đi bộ sai luật", Day: 1 } && aiImport.Added.All(w => w.Review is not null)
+      && aiImport.SkippedExisting.SequenceEqual([known]),
+    "my words import: dictionary form saved, the sense in the sentence added to the meaning, words in the library skipped");
+Check(ai.Inbox.Select(i => i.Text).SequenceEqual(["flummoxed", "grnadma"])
+      && aiImport.StillWaiting.Contains("grnadma — viết sai, đúng là grandma") && aiImport.StillWaiting.Contains("flummoxed — AI chưa trả lời"),
+    "my words import: a word the AI could not find in the dictionaries, or left out, keeps waiting with the reason");
 
 // ---- Ctrl+Alt+V window: save a word written by hand ----
 Check(QuickAdd.Normalize("v2.8.0") is null && QuickAdd.Normalize("COVID-19") is null && QuickAdd.Normalize("ver_2") is null,

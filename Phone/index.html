@@ -1304,10 +1304,11 @@ function onFullscreenChange() {
 document.addEventListener("fullscreenchange", onFullscreenChange);
 document.addEventListener("webkitfullscreenchange", onFullscreenChange);
 
-/** Subtitle text with the marked words as tappable spans. */
+/** Subtitle text with the marked words as tappable spans; a tapped word knows its line (saved as its context). */
 function renderParts(parts) {
+  const line = parts.map(p => p.t).join("");
   return parts.map(p => p.m
-    ? h("span", { class: "w-" + p.m, onclick: e => { e.stopPropagation(); wordTap(p); } }, p.t)
+    ? h("span", { class: "w-" + p.m, onclick: e => { e.stopPropagation(); wordTap(p, line); } }, p.t)
     : p.t);
 }
 
@@ -1424,7 +1425,7 @@ document.addEventListener("keydown", e => {
 });
 
 // A word tapped in the subtitle: the video pauses and a card shows the meaning (or offers to save a new word).
-function wordTap(part) {
+function wordTap(part, line) {
   if (!player) return;
   const video = player.video;
   player.popResume = player.popResume || !video.paused;
@@ -1441,7 +1442,7 @@ function wordTap(part) {
       : [h("div", { class: "muted" }, "Đã lưu trong Từ của tôi, đang chờ điền nghĩa.")];
   const save = part.m === "new" ? h("button", { class: "btn primary", onclick: async () => {
     try {
-      const r = await api("/api/video/word", { text: part.t });
+      const r = await api("/api/video/word", { text: part.t, line });
       toast(r.message);
       await refreshMarks();
     } catch (e) { errorToast(e); }

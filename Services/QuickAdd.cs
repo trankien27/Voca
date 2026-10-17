@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.RegularExpressions;
 using Voca.Models;
 
@@ -10,8 +9,12 @@ public sealed record QuickAddResult(string? Text, bool Added, Plan? ExistingPlan
     public bool Invalid => Text is null;
 }
 
-/// <summary>Result of importing the AI's answer for the waiting words.</summary>
-public sealed record MyWordsImport(List<Word> Added, List<string> SkippedExisting, int Day, IReadOnlyList<string> Errors);
+/// <summary>
+/// Result of importing the AI's answer for the waiting words. <paramref name="StillWaiting"/> are the waiting
+/// words the answer left out or had no dictionary meaning for, each with the reason ("x — AI chưa trả lời").
+/// </summary>
+public sealed record MyWordsImport(List<Word> Added, List<string> SkippedExisting, int Day, IReadOnlyList<string> Errors,
+    IReadOnlyList<string> StillWaiting);
 
 /// <summary>
 /// "Từ của tôi": select a word anywhere and press Ctrl+Alt+V. If the library already has it the learner
@@ -59,14 +62,22 @@ public static partial class QuickAdd
 
     public static bool IsWaiting(AppData data, string text) => data.Inbox.Any(i => Key(i.Text) == Key(text));
 
-    /// <summary>Adds the copied text unless it is not a word, is already in the library, or already waits.</summary>
-    public static QuickAddResult Add(AppData data, string? copied, DateTime now)
+    /// <summary>
+    /// Adds the copied text unless it is not a word, is already in the library, or already waits. The subtitle
+    /// line it was clicked in (<paramref name="line"/>) is kept as its context; a word already waiting without one gets it.
+    /// </summary>
+    public static QuickAddResult Add(AppData data, string? copied, DateTime now, string? line = null)
     {
         var text = Normalize(copied);
         if (text is null) return new QuickAddResult(null, false, null, null, false);
         if (FindInLibrary(data, text) is var (plan, word)) return new QuickAddResult(text, false, plan, word, false);
-        if (IsWaiting(data, text)) return new QuickAddResult(text, false, null, null, true);
-        data.Inbox.Add(new InboxWord { Text = text, AddedAt = now });
+        var context = ContextOf(line, text);
+        if (data.Inbox.FirstOrDefault(i => Key(i.Text) == Key(text)) is { } waiting)
+        {
+            if (waiting.Context.Length == 0) waiting.Context = context;
+            return new QuickAddResult(text, false, null, null, true);
+        }
+        data.Inbox.Add(new InboxWord { Text = text, AddedAt = now, Context = context });
         return new QuickAddResult(text, true, null, null, false);
     }
 
@@ -125,72 +136,5 @@ public static partial class QuickAdd
         plan = new Plan { Name = PlanName, Level = "Tự chọn", Description = "Từ bạn tự thêm bằng Ctrl+Alt+V.", CreatedAt = now };
         data.Plans.Add(plan);
         return plan;
-    }
-
-    /// <summary>Prompt asking an AI to fill in the waiting words, answered in the usual form (one day).</summary>
-    public static string BuildPrompt(IReadOnlyList<string> words, DateTime now)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine($"Điền thông tin cho {words.Count} từ/cụm từ tiếng Anh sau cho người Việt học từ vựng (giữ đúng thứ tự, không thêm hay bớt từ):");
-        sb.AppendLine(string.Join(", ", words));
-        sb.AppendLine($"""
-
-            Quy tắc cho mỗi từ:
-            - Từ: giữ nguyên như danh sách (viết thường, trừ danh từ riêng và từ viết tắt).
-            - Phiên âm: IPA giọng Anh-Anh, đặt trong dấu /.../
-            - Loại: n, v, adj, adv, phr v, phr, prep, conj
-            - Nghĩa: nghĩa tiếng Việt ngắn gọn, phổ biến nhất.
-            - Ví dụ: một câu tiếng Anh tự nhiên có dùng từ đó.
-            {PlanFormat.ExampleMeaningRule}
-            - Không dùng ký tự | bên trong ô.
-            Chỉ trả lời bằng MỘT khối code markdown theo đúng form sau, không giải thích gì thêm:
-            """);
-        sb.AppendLine("```markdown");
-        sb.AppendLine($"# Tên bộ từ: {PlanName}").AppendLine();
-        sb.AppendLine($"## Ngày 1 — Từ thêm {now:dd/MM}").AppendLine();
-        sb.AppendLine(PlanFormat.TableHeader).AppendLine(PlanFormat.TableSeparator).AppendLine(PlanFormat.TableRowTemplate);
-        sb.Append("```");
-        return sb.ToString();
-    }
-
-    /// <summary>
-    /// Imports the AI's answer: words not yet in the library become a new day of "Từ của tôi" (created
-    /// outside the course when missing) and leave the waiting list; words already in the library are skipped.
-    /// </summary>
-    public static MyWordsImport Import(AppData data, string answer, DateTime now)
-    {
-        var read = PlanFormat.Read(answer, null);
-        if (read.Plan is not { } parsed || read.Plan.Words.Count == 0)
-            return new MyWordsImport([], [], 0, read.Errors.Count > 0 ? read.Errors : ["Không đọc được từ nào trong câu trả lời."]);
-        if (!read.CanImport) return new MyWordsImport([], [], 0, read.Errors);
-
-        var existingPlan = data.Plans.FirstOrDefault(p => p.Name == PlanName);
-        var day = (existingPlan?.DayCount ?? 0) + 1;
-        var added = new List<Word>();
-        var skipped = new List<string>();
-        foreach (var word in parsed.Words)
-        {
-            if (FindInLibrary(data, word.Text) is not null || added.Any(a => Key(a.Text) == Key(word.Text)))
-            {
-                skipped.Add(word.Text);
-                Remove(data, word.Text);
-                continue;
-            }
-            added.Add(new Word
-            {
-                Day = day, Text = word.Text.Trim(), Phonetic = word.Phonetic, PartOfSpeech = word.PartOfSpeech,
-                Meaning = word.Meaning, Example = word.Example, ExampleMeaning = word.ExampleMeaning
-            });
-        }
-        if (added.Count == 0) return new MyWordsImport([], skipped, 0, []);
-        var plan = MyPlan(data, now);
-        plan.DayTitles[day] = DayTitleFor(now);
-        plan.Words.AddRange(added);
-        foreach (var word in added)
-        {
-            StartReviewing(word, now);
-            Remove(data, word.Text);
-        }
-        return new MyWordsImport(added, skipped, day, []);
     }
 }

@@ -435,16 +435,19 @@ public partial class VideoPlayerWindow : Window
     {
         e.Handled = true;
         if (e.OriginalSource is not Run { Tag: SubtitlePart { Mark: WordMark.New } part }) return;
-        ShowToast(SaveNewWord(_store, part.Text));
+        ShowToast(SaveNewWord(_store, part.Text, _shown?.Text));
         _marker = new WordMarker(_store.Data, _newWords);
         ShowLine(_shown, force: true);
     }
 
-    /// <summary>Saves a new word of a video to "Từ của tôi" (waiting for its meaning) and says what happened.</summary>
-    internal static string SaveNewWord(Store store, string text)
+    /// <summary>
+    /// Saves a new word of a video to "Từ của tôi" (waiting for its meaning, with the subtitle line it was in as
+    /// its context) and says what happened.
+    /// </summary>
+    internal static string SaveNewWord(Store store, string text, string? line)
     {
         QuickAddResult? result = null;
-        store.Update(d => result = QuickAdd.Add(d, text, DateTime.Now));
+        store.Update(d => result = QuickAdd.Add(d, text, DateTime.Now, line));
         return QuickAdd.Describe(result!, text);
     }
 

@@ -35,10 +35,14 @@
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <DockPanel Margin="2,3">
-                                    <TextBlock DockPanel.Dock="Right" Text="{Binding Added}" FontSize="11" Foreground="#667085" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding Text}" FontWeight="SemiBold" Foreground="#172033" TextTrimming="CharacterEllipsis"/>
-                                </DockPanel>
+                                <StackPanel Margin="2,3" ToolTip="{Binding ContextTip}">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding Added}" FontSize="11" Foreground="#667085" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding Text}" FontWeight="SemiBold" Foreground="#172033" TextTrimming="CharacterEllipsis"/>
+                                    </DockPanel>
+                                    <TextBlock Text="{Binding Context}" FontSize="11" FontStyle="Italic" Foreground="#667085" TextTrimming="CharacterEllipsis"
+                                               Visibility="{Binding ContextVisibility}"/>
+                                </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
@@ -48,17 +52,22 @@
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top">
                         <TextBlock Style="{StaticResource Step}" Text="1 · Sao chép prompt, dán vào AI"/>
+                        <TextBlock Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,-2,0,6"
+                                   Text="Prompt bắt AI tra như từ điển Cambridge / Oxford Learner's / Longman: IPA theo Cambridge, từ loại, nghĩa phổ biến nhất (và nghĩa trong câu phim nếu khác), câu ví dụ; từ không có trong từ điển thì để trống chứ không bịa. AI trả lời bằng một khối JSON."/>
                         <WrapPanel Margin="-3,0,0,10">
                             <Button x:Name="CopyPromptButton" Content="Sao chép prompt" Click="CopyPrompt_Click" Background="{StaticResource Accent}" Foreground="White" FontWeight="SemiBold"/>
                             <Button Content="Claude" Tag="https://claude.ai/new" Click="OpenAi_Click"/>
                             <Button Content="ChatGPT" Tag="https://chatgpt.com/" Click="OpenAi_Click"/>
                             <Button Content="Gemini" Tag="https://gemini.google.com/app" Click="OpenAi_Click"/>
                         </WrapPanel>
-                        <TextBlock Style="{StaticResource Step}" Text="2 · Dán câu trả lời của AI rồi nhập"/>
+                        <TextBlock Style="{StaticResource Step}" Text="2 · Copy câu trả lời của AI rồi bấm Dán kết quả"/>
                     </StackPanel>
                     <StackPanel DockPanel.Dock="Bottom">
                         <WrapPanel Margin="-3,8,0,0">
-                            <Button x:Name="ImportButton" Content="Nhập vào “Từ của tôi”" Click="Import_Click" Background="{StaticResource Accent}" Foreground="White" FontWeight="SemiBold"/>
+                            <Button Content="📋 Dán kết quả" Click="PasteAnswer_Click" Background="{StaticResource Accent}" Foreground="White" FontWeight="SemiBold"
+                                    ToolTip="Dán câu trả lời của AI đang ở clipboard vào ô trên và điền nghĩa cho các từ đang chờ"/>
+                            <Button x:Name="ImportButton" Content="Nhập nội dung trong ô" Click="Import_Click"
+                                    ToolTip="Nhập lại sau khi tự dán hoặc sửa câu trả lời trong ô"/>
                             <Button x:Name="PracticeButton" Content="▶ Học ngay" Click="Practice_Click" Visibility="Collapsed"
                                     ToolTip="Lật thẻ rồi trắc nghiệm các từ vừa nhập; sau đó chúng vào lịch ôn tập"/>
                         </WrapPanel>

@@ -26,6 +26,7 @@ public partial class SubtitleReaderWindow : Window
     private readonly IReadOnlyList<VideoWord> _newWords;
     /// <summary>The runs of words that had a mark when the text was laid out; restyled in place when it changes.</summary>
     private readonly List<Run> _marked = [];
+    private readonly Dictionary<Run, string> _lineOf = []; // subtitle line of each marked word, its context when saved
     private WordMarker _marker;
     private int _paragraphs, _words;
 
@@ -56,6 +57,7 @@ public partial class SubtitleReaderWindow : Window
     private void Render()
     {
         _marked.Clear();
+        _lineOf.Clear();
         var marks = MarkBox.IsChecked == true;
         Legend.Visibility = marks ? Visibility.Visible : Visibility.Collapsed;
         var document = new FlowDocument
@@ -74,7 +76,7 @@ public partial class SubtitleReaderWindow : Window
             {
                 if (i > 0) paragraph.Inlines.Add(new Run(" "));
                 if (!marks) { paragraph.Inlines.Add(new Run(group[i].Text)); continue; }
-                foreach (var part in Subtitles.Mark(group[i].Text, _marker)) paragraph.Inlines.Add(Piece(part));
+                foreach (var part in Subtitles.Mark(group[i].Text, _marker)) paragraph.Inlines.Add(Piece(part, group[i].Text));
             }
             document.Blocks.Add(paragraph);
         }
@@ -84,12 +86,13 @@ public partial class SubtitleReaderWindow : Window
         ShowSummary();
     }
 
-    private Run Piece(SubtitlePart part)
+    private Run Piece(SubtitlePart part, string line)
     {
         var run = new Run(part.Text);
         if (part.Mark == WordMark.None) return run;
         run.MouseLeftButtonDown += Word_MouseDown;
         _marked.Add(run);
+        _lineOf[run] = line;
         Paint(run, part);
         return run;
     }
@@ -123,7 +126,7 @@ public partial class SubtitleReaderWindow : Window
     {
         if (sender is not Run { Tag: SubtitlePart { Mark: WordMark.New } part }) return;
         e.Handled = true;
-        StatusText.Text = VideoPlayerWindow.SaveNewWord(_store, part.Text); // the store's Changed restyles the text
+        StatusText.Text = VideoPlayerWindow.SaveNewWord(_store, part.Text, _lineOf.GetValueOrDefault((Run)sender)); // the store's Changed restyles the text
     }
 
     private void ShowSummary()
