@@ -133,47 +133,104 @@ label.lbl { display: block; font-size: 13px; font-weight: 600; color: var(--mute
 .video-item .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .bar { height: 3px; border-radius: 2px; background: var(--line); margin-top: 8px; overflow: hidden; }
 .bar i { display: block; height: 100%; background: var(--accent); }
-#player { position: fixed; inset: 0; z-index: 12; background: #000; color: #fff; display: flex; flex-direction: column; overflow: hidden; }
+#player { position: fixed; inset: 0; z-index: 12; background: #0F0F0F; color: #fff; display: flex; flex-direction: column; overflow: hidden;
+  padding-top: env(safe-area-inset-top); }
 #player > * { flex: none; }
-#player .top { display: flex; align-items: center; gap: 10px; padding: calc(8px + env(safe-area-inset-top)) 12px 8px; background: #000; }
-#player .top .name { flex: 1; min-width: 0; font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#player .top button { width: 40px; height: 40px; border-radius: 50%; background: #222; color: #fff; font-size: 18px; flex: none; }
-/* the player: the video, its controls and (full screen / landscape) the subtitle, all inside .stage */
-.stage { position: relative; background: #000; user-select: none; -webkit-user-select: none;
+.vtitle { padding: 10px 16px 0; font-weight: 600; font-size: 16px; line-height: 1.3; word-break: break-word; }
+/* the player, made like YouTube's: the video, its controls and (full screen / landscape) the subtitle, all inside .stage */
+.stage { position: relative; background: #000; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; --yt: #FF0033;
   --sub-outline: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 4px #000, 0 2px 6px rgba(0,0,0,.8); }
-.screen { position: relative; background: #000; }
+.screen { position: relative; background: #000; overflow: hidden; }
 .screen video { display: block; width: 100%; max-height: 56vh; background: #000; }
-.tap { position: absolute; inset: 0; }
-.ctl { position: absolute; inset: 0; display: flex; flex-direction: column; pointer-events: none;
-  background: linear-gradient(#0009, #0000 30%, #0000 55%, #000b); transition: opacity .2s; }
+.tap { position: absolute; inset: 0; touch-action: none; }
+.stage.hide-ctl .screen { cursor: none; }
+.ico { width: 24px; height: 24px; fill: currentColor; display: block; pointer-events: none; }
+.ctl { position: absolute; inset: 0; display: flex; flex-direction: column; pointer-events: none; background: rgba(0,0,0,.45); transition: opacity .25s; }
 .stage.hide-ctl .ctl { opacity: 0; }
 .stage.hide-ctl .ctl * { pointer-events: none !important; }
-.ctl button, .ctl select, .ctl input { pointer-events: auto; }
-.ctl-top { display: none; align-items: center; gap: 10px; padding: calc(8px + env(safe-area-inset-top)) 12px 0; }
-.ctl-top .name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ctl-mid { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; gap: 28px; }
-.cbtn { width: 44px; height: 44px; border-radius: 50%; background: rgba(0,0,0,.45); color: #fff; font-size: 16px; display: grid; place-items: center; flex: none; }
-.cbtn.big { width: 58px; height: 58px; font-size: 24px; background: rgba(108,92,231,.85); }
-.ctl-bot { padding: 0 10px calc(6px + env(safe-area-inset-bottom)); }
-.seek { width: 100%; height: 22px; margin: 0; -webkit-appearance: none; appearance: none; background: transparent; }
-.seek::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, #6C5CE7 var(--played, 0%), #fff8 var(--played, 0%), #fff8 var(--loaded, 0%), #fff3 var(--loaded, 0%)); }
-.seek::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; margin-top: -6px; }
-.seek::-moz-range-track { height: 4px; border-radius: 2px; background: #fff3; }
-.seek::-moz-range-progress { height: 4px; border-radius: 2px; background: #6C5CE7; }
-.seek::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 0; }
-.ctl-row { display: flex; align-items: center; gap: 6px; }
-.ctl-row .time { font-size: 13px; font-variant-numeric: tabular-nums; flex: 1; white-space: nowrap; }
-.ctl-row button, .ctl-row select { min-width: 40px; height: 36px; padding: 0 8px; border-radius: 8px; background: rgba(0,0,0,.35); color: #fff; border: 0; font: inherit; font-size: 13px; }
-.ctl-row button.on { background: #6C5CE7; }
-.ctl-row select option { color: #000; }
-.flash { position: absolute; top: 22%; padding: 10px 16px; border-radius: 99px; background: rgba(0,0,0,.6); font-weight: 700; pointer-events: none; opacity: 0; transition: opacity .3s; }
-.flash.show { opacity: 1; transition: none; }
-.flash.left { left: 12%; } .flash.right { right: 12%; }
-.spin { position: absolute; left: 50%; top: 50%; width: 42px; height: 42px; margin: -21px; border-radius: 50%; border: 4px solid #fff4; border-top-color: #fff; animation: spin 1s linear infinite; pointer-events: none; display: none; }
+.ctl button { pointer-events: auto; }
+.ibtn { width: 44px; height: 44px; border-radius: 50%; color: #fff; display: grid; place-items: center; flex: none; position: relative; }
+.ibtn:active { background: rgba(255,255,255,.15); }
+.ibtn:disabled { opacity: .35; }
+.ibtn.cc.on::after { content: ""; position: absolute; left: 11px; right: 11px; bottom: 8px; height: 3px; border-radius: 2px; background: var(--yt); }
+.ctl-top { display: flex; align-items: center; gap: 2px; padding: 4px 4px 0; }
+.ctl-top .name { flex: 1; min-width: 0; font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; visibility: hidden; }
+.ctl-mid { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; gap: 13%; }
+.ctl-mid .ibtn { width: 52px; height: 52px; }
+.ctl-mid .ibtn .ico { width: 32px; height: 32px; }
+.ctl-mid .ibtn.play { width: 68px; height: 68px; }
+.ctl-mid .ibtn.play .ico { width: 50px; height: 50px; }
+.stage.ended .ctl-mid { visibility: hidden; }
+.ctl-bot { display: flex; align-items: center; gap: 2px; padding: 0 4px 16px 12px; }
+.ctl-bot .time { flex: 1; min-width: 0; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ctl-bot .time span { color: rgba(255,255,255,.7); }
+.desk { display: none; }
+/* the seek bar: a thin red line on the bottom edge of the picture, with a knob while the controls show */
+.scrub { position: absolute; left: 0; right: 0; bottom: 0; height: 18px; z-index: 4; touch-action: none; cursor: pointer; transition: opacity .25s; }
+.scrub .rail { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,.3); transition: height .1s; }
+.scrub .load { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: rgba(255,255,255,.45); }
+.scrub .done { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--yt); }
+.scrub .knob { position: absolute; left: 0; bottom: -5px; width: 13px; height: 13px; margin-left: -6.5px; border-radius: 50%; background: var(--yt); transition: transform .1s; }
+.scrub.drag .rail { height: 5px; }
+.scrub.drag .knob { transform: scale(1.4); }
+.stage.hide-ctl .scrub { pointer-events: none; }
+.stage.hide-ctl .scrub .knob { transform: scale(0); }
+.stage.hide-ctl .scrub .load { opacity: 0; }
+.scrub .tip { position: absolute; left: 0; bottom: 64px; transform: translateX(-50%); width: max-content; max-width: min(78%, 420px); padding: 5px 10px; border-radius: 8px;
+  background: rgba(0,0,0,.82); text-align: center; pointer-events: none; display: none; }
+.scrub .tip b { display: block; font-size: 14px; font-variant-numeric: tabular-nums; }
+.scrub .tip span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; color: #ddd; }
+.scrub .tip span:empty { display: none; }
+.scrub.drag .tip, .scrub.hover .tip { display: block; }
+/* double tap on a side: a half circle with arrows and the seconds skipped, adding up while tapping on */
+.ripple { position: absolute; top: 0; bottom: 0; width: 40%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  background: rgba(255,255,255,.14); font-size: 13px; font-weight: 600; pointer-events: none; opacity: 0; transition: opacity .35s; z-index: 1; }
+.ripple.left { left: 0; border-radius: 0 50% 50% 0 / 0 50% 50% 0; }
+.ripple.right { right: 0; border-radius: 50% 0 0 50% / 50% 0 0 50%; }
+.ripple.show { opacity: 1; transition: none; }
+.ripple .arrows { display: flex; gap: 2px; }
+.ripple .arrows i { width: 0; height: 0; border-top: 7px solid transparent; border-bottom: 7px solid transparent; opacity: .25; }
+.ripple.right .arrows i { border-left: 11px solid #fff; }
+.ripple.left .arrows i { border-right: 11px solid #fff; }
+.ripple.show .arrows i { animation: arrow .75s infinite; }
+.ripple.right .arrows i:nth-child(2), .ripple.left .arrows i:nth-child(2) { animation-delay: .15s; }
+.ripple.right .arrows i:nth-child(3), .ripple.left .arrows i:nth-child(1) { animation-delay: .3s; }
+@keyframes arrow { 0%, 100% { opacity: .25; } 40% { opacity: 1; } }
+/* held down: 2× until let go */
+.pill { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: none; align-items: center; gap: 4px; padding: 5px 12px; border-radius: 99px;
+  background: rgba(0,0,0,.6); font-size: 14px; font-weight: 600; pointer-events: none; z-index: 2; }
+.pill .ico { width: 18px; height: 18px; }
+.pill.show { display: flex; }
+/* what a key or a click did, in a circle that grows and fades */
+.bezel { position: absolute; left: 50%; top: 50%; width: 60px; height: 60px; margin: -30px; border-radius: 50%; background: rgba(0,0,0,.5);
+  display: grid; place-items: center; font-size: 14px; font-weight: 600; pointer-events: none; opacity: 0; z-index: 2; }
+.bezel .ico { width: 34px; height: 34px; }
+.bezel.go { animation: bezel .5s ease-out; }
+@keyframes bezel { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(1.6); } }
+.spin { position: absolute; left: 50%; top: 50%; width: 42px; height: 42px; margin: -21px; border-radius: 50%; border: 4px solid #fff4; border-top-color: #fff; animation: spin 1s linear infinite; pointer-events: none; display: none; z-index: 1; }
 .stage.loading .spin { display: block; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: #000a; text-align: center; padding: 16px; }
-.end .btn { background: #6C5CE7; color: #fff; }
+/* the end: the next episode plays after a 5 second countdown (Hủy stops it) */
+.end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: rgba(0,0,0,.72); text-align: center; padding: 16px; }
+.end .up { font-size: 13px; color: #ccc; }
+.end .nm { font-weight: 700; font-size: 16px; max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.end .acts { display: flex; gap: 10px; margin-top: 4px; }
+.end .acts button { padding: 8px 18px; border-radius: 99px; font-size: 14px; font-weight: 600; background: rgba(255,255,255,.18); }
+.ring { position: relative; width: 60px; height: 60px; border-radius: 50%; background: rgba(255,255,255,.18); display: grid; place-items: center; }
+.ring .ico { width: 34px; height: 34px; }
+.ring-svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); fill: none; stroke: #fff; stroke-width: 4; stroke-dasharray: 188.5; stroke-dashoffset: 188.5; display: none; }
+.ring.count .ring-svg { display: block; animation: ring 5s linear forwards; }
+@keyframes ring { to { stroke-dashoffset: 0; } }
+/* settings (⚙): a sheet from the bottom, over the page or the full screen player */
+.vset-back { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.5); }
+.vset { position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; max-width: 520px; margin: 0 auto; max-height: 85vh; overflow-y: auto; background: #212121; color: #fff;
+  border-radius: 14px 14px 0 0; padding: 6px 0 calc(8px + env(safe-area-inset-bottom)); }
+.vset .grab { width: 36px; height: 4px; border-radius: 2px; background: #555; margin: 4px auto 6px; }
+.vset button { display: flex; align-items: center; gap: 18px; width: 100%; padding: 12px 20px; font-size: 15px; text-align: left; }
+.vset button:active { background: rgba(255,255,255,.1); }
+.vset button .v { margin-left: auto; color: #aaa; font-size: 14px; }
+.vset button .ck { width: 24px; text-align: center; font-weight: 700; }
+.vset button.hd { font-weight: 600; border-bottom: 1px solid #3a3a3a; margin-bottom: 4px; }
 .sub { min-height: 76px; padding: 10px 16px; font-size: calc(17px * var(--sub-scale, 1) * var(--sub-fit, 1)); line-height: 1.4; text-align: center; color: #fff; }
 .sub.empty { color: #888; font-size: 15px; display: flex; align-items: center; justify-content: center; }
 .w-new { color: #FFC94D; font-weight: 700; } .w-learning { color: #B9AEFF; font-weight: 700; } .w-waiting { color: #7EE2A8; font-weight: 700; }
@@ -186,25 +243,34 @@ label.lbl { display: block; font-size: 13px; font-weight: 600; color: var(--mute
 .pop { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--card); color: var(--ink); border-radius: 18px 18px 0 0;
   padding: 18px 16px calc(16px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 30px rgba(0,0,0,.35); max-width: 560px; margin: 0 auto; }
 .pop .word { font-size: 28px; margin: 0; }
-/* full screen (real, or the page covering the screen on iPhone) and landscape: the video fills the screen, the subtitle sits on it */
-.stage.full { position: fixed; inset: 0; z-index: 25; display: flex; flex-direction: column; justify-content: center; }
-.stage.full .screen, .stage.full video { height: 100%; width: 100%; }
-.stage.full video { max-height: none; object-fit: contain; }
-.stage.full .ctl-top { display: flex; }
-.stage.full .sub { position: absolute; left: 6%; right: 6%; bottom: 74px; min-height: 0; padding: 5px 12px; text-shadow: var(--sub-outline); font-size: calc(17px * var(--sub-scale, 1) * var(--sub-fit, 1)); pointer-events: auto; transition: bottom .2s; }
-.stage.full.hide-ctl .sub { bottom: 16px; }
-.stage.full .sub.empty, .stage.full .sub:empty { display: none; }
+/* full screen (real, or the page covering the screen on iPhone) and landscape ("big"): the video fills the screen, the subtitle sits on it */
+.stage.full { position: fixed; inset: 0; z-index: 25; }
+.stage.big { display: flex; flex-direction: column; justify-content: center; }
+.stage.big .screen, .stage.big video { height: 100%; width: 100%; }
+.stage.big video { max-height: none; object-fit: contain; }
+.stage.big .ctl-top { padding: calc(6px + env(safe-area-inset-top)) calc(6px + env(safe-area-inset-right)) 0 calc(6px + env(safe-area-inset-left)); }
+.stage.big .ctl-top .name { visibility: visible; }
+.stage.big .ctl-bot { padding: 0 calc(10px + env(safe-area-inset-right)) calc(30px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left)); }
+.stage.big .ctl-bot .time { font-size: 13px; }
+.stage.big .scrub { left: calc(20px + env(safe-area-inset-left)); right: calc(20px + env(safe-area-inset-right)); bottom: calc(14px + env(safe-area-inset-bottom)); }
+.stage.big.hide-ctl .scrub { opacity: 0; }
+.stage.big .sub { position: absolute; left: 6%; right: 6%; bottom: 96px; min-height: 0; padding: 5px 12px; text-shadow: var(--sub-outline); pointer-events: auto; transition: bottom .2s; }
+.stage.big.hide-ctl .sub { bottom: 16px; }
+.stage.big .sub.empty, .stage.big .sub:empty { display: none; }
 @media (orientation: landscape) and (max-height: 600px) {
-  #player { display: block; overflow-y: auto; }
-  #player > .top { display: none; }
+  #player { display: block; overflow-y: auto; padding-top: 0; }
   #player > .transcript { overflow: visible; }
-  .stage { height: 100vh; height: 100dvh; display: flex; flex-direction: column; justify-content: center; }
-  .stage .screen, .stage video { height: 100%; width: 100%; }
-  .stage video { max-height: none; object-fit: contain; }
-  .stage .ctl-top { display: flex; }
-  .stage .sub { position: absolute; left: 8%; right: 8%; bottom: 74px; min-height: 0; padding: 5px 12px; text-shadow: var(--sub-outline); font-size: calc(16px * var(--sub-scale, 1) * var(--sub-fit, 1)); transition: bottom .2s; }
-  .stage.hide-ctl .sub { bottom: 14px; }
-  .stage .sub.empty, .stage .sub:empty { display: none; }
+  .stage { height: 100vh; height: 100dvh; }
+  .stage:not(.full) .tap { touch-action: pan-y; } /* swiping up on the picture scrolls to the lines below */
+}
+/* with a mouse (a computer): YouTube's computer layout — buttons in the bottom row, no dimming of the picture */
+@media (hover: hover) and (pointer: fine) {
+  .ctl { background: linear-gradient(rgba(0,0,0,.5), rgba(0,0,0,0) 22%, rgba(0,0,0,0) 68%, rgba(0,0,0,.65)); }
+  .ctl-mid { visibility: hidden; }
+  .desk { display: grid; }
+  .mob { display: none; }
+  .ibtn:hover { background: rgba(255,255,255,.12); }
+  .scrub:hover .rail { height: 5px; }
 }
 /* with the subtitle on the picture (full screen, landscape), messages show at the top so they never cover it */
 .stage .toast { top: calc(12px + env(safe-area-inset-top)); bottom: auto; }
@@ -720,10 +786,50 @@ function renderVideos() {
 
 let player = null;
 
+/** The player's icons (Material icons, as YouTube's), drawn inline so they need no file. */
+const Icons = {
+  play: "M8 5v14l11-7z",
+  pause: "M6 19h4V5H6v14zm8-14v14h4V5h-4z",
+  replay: "M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z",
+  prev: "M6 6h2v12H6zm3.5 6 8.5 6V6z",
+  next: "M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z",
+  ff: "M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z",
+  full: "M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z",
+  unfull: "M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z",
+  cc: "M19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z",
+  gear: "M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z",
+  down: "M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z",
+  back: "M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z",
+  speed: "M20.38 8.57l-1.23 1.85a8 8 0 0 1-.22 7.58H5.07A8 8 0 0 1 15.58 6.85l1.85-1.23A10 10 0 0 0 3.35 19a2 2 0 0 0 1.72 1h13.85a2 2 0 0 0 1.74-1 10 10 0 0 0-.27-10.44zm-9.79 6.84a2 2 0 0 0 2.83 0l5.66-8.49-8.49 5.66a2 2 0 0 0 0 2.83z",
+  text: "M9 4v3h5v12h3V7h5V4H9zm-6 8h3v7h3v-7h3V9H3v3z",
+  vol: "M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z",
+  mute: "M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.8 8.8 0 0 0 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 0 0 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4 9.91 6.09 12 8.18V4z",
+};
+const SvgNs = "http://www.w3.org/2000/svg";
+
+function icon(name) {
+  const svg = document.createElementNS(SvgNs, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("class", "ico");
+  const path = document.createElementNS(SvgNs, "path");
+  path.setAttribute("d", Icons[name]);
+  svg.append(path);
+  return svg;
+}
+
+const setIcon = (button, name) => button.replaceChildren(icon(name));
+
+/** Landscape on a phone: the player fills the screen as in full screen (the lines to read are below it). */
+const WideScreen = matchMedia("(orientation: landscape) and (max-height: 600px)");
+WideScreen.addEventListener("change", () => player && layoutPlayer());
+
+/** Plays the next episode by itself at the end of one (⚙ → Tự phát tập tiếp); the phone remembers the choice. */
+let autoNext = (() => { try { return localStorage.getItem("voca.autoNext") !== "0"; } catch { return true; } })();
+
 /**
- * Opens a video in Voca's own player: the browser's controls are not used, so the controls, the marked subtitle,
- * the word card and messages all live inside .stage and go full screen with it. Under the video in portrait: the
- * subtitle, then every line of the video to read and tap.
+ * Opens a video in Voca's own player, made like YouTube's: the browser's controls are not used, so the controls,
+ * the marked subtitle, the word card and messages all live inside .stage and go full screen with it. Under the video
+ * in portrait: the subtitle, the name, then every line of the video to read and tap.
  */
 async function openPlayer(id, push = true) {
   let data;
@@ -732,39 +838,51 @@ async function openPlayer(id, push = true) {
 
   const video = h("video", { playsinline: true, "webkit-playsinline": true, preload: "metadata", src: "/media/" + id });
   const sub = h("div", { class: "sub", onclick: () => togglePlay() });
-  const playButton = h("button", { class: "cbtn big", "aria-label": "Phát / dừng", onclick: e => { e.stopPropagation(); togglePlay(); } }, "▶");
-  const seek = h("input", { class: "seek", type: "range", min: 0, max: 1, step: 0.1, value: 0, "aria-label": "Tua" });
-  const time = h("span", { class: "time" }, "0:00 / 0:00");
-  const ccButton = h("button", { class: "on", "aria-label": "Phụ đề", onclick: () => { player.showSubs = !player.showSubs; ccButton.classList.toggle("on", player.showSubs); renderLine(true); poke(); } }, "CC");
-  const speed = h("select", { "aria-label": "Tốc độ", onchange: () => { video.playbackRate = Number(speed.value); poke(); } },
-    [0.5, 0.75, 1, 1.25, 1.5].map(s => h("option", { value: s, selected: s === 1 }, s + "×")));
-  const fullButton = h("button", { "aria-label": "Toàn màn hình", onclick: () => toggleFull() }, "⛶");
-  const sizeButton = h("button", { "aria-label": "Cỡ chữ phụ đề", onclick: () => { setSubSize((subSize + 1) % SubSizes.length, true); poke(); } }, "Aa");
-  const flashLeft = h("div", { class: "flash left" }), flashRight = h("div", { class: "flash right" });
+  // A button of the controls: clicking it keeps the controls up a little longer.
+  const button = (name, label, action, cls) => {
+    const b = h("button", { class: "ibtn" + (cls ? " " + cls : ""), "aria-label": label, title: label,
+      onclick: e => { e.stopPropagation(); e.currentTarget.blur(); action(); poke(); } });
+    setIcon(b, name);
+    return b;
+  };
+  const playButton = button("play", "Phát / dừng (k)", togglePlay, "play");
+  const prevButton = button("prev", "Nghe lại câu", replayLine);
+  const nextButton = button("next", "Câu sau", nextLine);
+  const deskPlay = button("play", "Phát / dừng (k)", togglePlay, "desk");
+  const deskNext = button("next", "Câu sau", nextLine, "desk");
+  const muteButton = button("vol", "Tắt tiếng (m)", toggleMute, "desk");
+  const ccButtons = [button("cc", "Phụ đề (c)", toggleSubs, "cc on mob"), button("cc", "Phụ đề (c)", toggleSubs, "cc on desk")];
+  const fullButton = button("full", "Toàn màn hình (f)", toggleFull);
+  const closeButton = button("down", "Đóng", () => player.full ? toggleFull() : closePlayer());
+  const time = h("div", { class: "time" }, "0:00", h("span", {}, " / 0:00"));
+  if (!data.lines.length) for (const b of [prevButton, nextButton, deskNext]) b.disabled = true;
+
+  const scrubDone = h("div", { class: "done" }), scrubLoad = h("div", { class: "load" }), knob = h("div", { class: "knob" });
+  const tipTime = h("b"), tipLine = h("span");
+  const tip = h("div", { class: "tip" }, tipTime, tipLine);
+  const scrub = h("div", { class: "scrub", role: "slider", "aria-label": "Tua" }, h("div", { class: "rail" }, scrubLoad, scrubDone), knob, tip);
+  const ripple = side => h("div", { class: "ripple " + (side < 0 ? "left" : "right") }, h("div", { class: "arrows" }, h("i"), h("i"), h("i")), h("div"));
+  const ripples = { [-1]: ripple(-1), 1: ripple(1) };
+  const pill = h("div", { class: "pill" }, "2×", icon("ff"));
+  const bezel = h("div", { class: "bezel" });
   const endBox = h("div", { class: "end", hidden: true });
   const ctl = h("div", { class: "ctl" },
-    h("div", { class: "ctl-top" },
-      h("button", { class: "cbtn", "aria-label": "Thoát toàn màn hình", onclick: () => toggleFull() }, "‹"),
-      h("div", { class: "name" }, data.name)),
-    h("div", { class: "ctl-mid" },
-      h("button", { class: "cbtn", "aria-label": "Lùi 10 giây", onclick: e => { e.stopPropagation(); skip(-10); } }, "−10"),
-      playButton,
-      h("button", { class: "cbtn", "aria-label": "Tới 10 giây", onclick: e => { e.stopPropagation(); skip(10); } }, "+10")),
-    h("div", { class: "ctl-bot" }, seek,
-      h("div", { class: "ctl-row" },
-        h("button", { "aria-label": "Nghe lại câu", onclick: () => { replayLine(); poke(); } }, "⏮ Câu"),
-        time, speed, sizeButton, ccButton, fullButton)));
+    h("div", { class: "ctl-top" }, closeButton, h("div", { class: "name" }, data.name), ccButtons[0],
+      button("gear", "Cài đặt", () => openSettings(), "mob")),
+    h("div", { class: "ctl-mid" }, prevButton, playButton, nextButton),
+    h("div", { class: "ctl-bot" }, deskPlay, deskNext, muteButton, time, ccButtons[1],
+      button("gear", "Cài đặt", () => openSettings(), "desk"), fullButton));
   const tapLayer = h("div", { class: "tap" });
-  const screenBox = h("div", { class: "screen" }, video, tapLayer, h("div", { class: "spin" }), flashLeft, flashRight, ctl, endBox);
+  const screenBox = h("div", { class: "screen" }, video, tapLayer, h("div", { class: "spin" }), ripples[-1], ripples[1], pill, bezel, endBox, ctl, scrub);
   const stage = h("div", { class: "stage loading" }, screenBox, sub);
   const transcript = h("div", { class: "transcript" });
-  player = { id, data, video, sub, stage, transcript, seek, time, playButton, endBox, flashLeft, flashRight,
-    line: -2, showSubs: true, ended: false, timer: 0, hideTimer: 0, popResume: false, seeking: false, full: false };
+  player = { id, data, video, sub, stage, transcript, scrub, scrubDone, scrubLoad, knob, tip, tipTime, tipLine, time, endBox, ripples, pill, bezel,
+    playButtons: [playButton, deskPlay], muteButton, ccButtons, fullButton,
+    line: -2, showSubs: true, ended: false, timer: 0, hideTimer: 0, popResume: false, seeking: false, full: false,
+    menu: null, countdown: 0, keepEnd: false, streak: null, rateBeforeHold: 1 };
   setSubSize(subSize, false);
+  layoutPlayer();
 
-  const top = h("div", { class: "top" },
-    h("button", { "aria-label": "Đóng", onclick: () => closePlayer() }, "‹"),
-    h("div", { class: "name" }, data.name));
   const legend = data.lines.length ? h("div", { class: "legend" },
     h("span", { class: "w-new" }, "Từ mới"), "chạm để lưu",
     h("span", { class: "w-learning" }, "Đang học"), "chạm xem nghĩa",
@@ -773,37 +891,99 @@ async function openPlayer(id, push = true) {
     h("span", { class: "at" }, clock(line.s)), h("span", {}, renderParts(line.parts)))));
 
   const root = $("#player");
-  root.replaceChildren(top, stage, legend || "", transcript);
+  root.replaceChildren(stage, h("div", { class: "vtitle" }, data.name), legend || "", transcript);
   root.hidden = false;
   root.scrollTop = 0;
   document.body.style.overflow = "hidden";
   document.body.classList.add("playing");
   if (push) history.pushState({ player: id }, "");
 
-  // ---- taps on the picture: one shows / hides the controls, two on a side skip 10 seconds ----
-  let lastTap = 0, tapTimer = 0;
-  tapLayer.addEventListener("click", e => {
-    const now = Date.now();
-    const side = e.offsetX < tapLayer.clientWidth / 3 ? -1 : e.offsetX > tapLayer.clientWidth * 2 / 3 ? 1 : 0;
-    if (now - lastTap < 300 && side !== 0) {
-      clearTimeout(tapTimer);
-      lastTap = 0;
-      skip(10 * side);
+  // ---- the picture, as on YouTube. Touch: a tap shows / hides the controls, a double tap on a side skips 10 seconds
+  // (each further tap there 10 more), holding plays at 2×, swiping up / down enters / leaves full screen.
+  // Mouse: a click plays / pauses, a double click goes full screen, holding plays at 2×, moving shows the controls. ----
+  let down = null, lastTap = { at: 0, side: 0 }, tapTimer = 0, lastType = "";
+  tapLayer.addEventListener("pointerdown", e => {
+    if (e.button > 0) return;
+    lastType = e.pointerType;
+    down = { x: e.clientX, y: e.clientY, held: false };
+    down.timer = setTimeout(() => {
+      if (!down || video.paused) return;
+      down.held = true;
+      holdFast(true);
+    }, 500);
+  });
+  tapLayer.addEventListener("pointermove", e => {
+    if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 12) clearTimeout(down.timer);
+  });
+  tapLayer.addEventListener("pointerup", e => {
+    if (!down) return;
+    const d = down;
+    down = null;
+    clearTimeout(d.timer);
+    if (d.held) { holdFast(false); return; }
+    const dx = e.clientX - d.x, dy = e.clientY - d.y;
+    if (e.pointerType !== "mouse" && Math.abs(dy) > 60 && Math.abs(dy) > Math.abs(dx) * 1.5) {
+      if ((dy < 0) !== player.full) toggleFull();
       return;
     }
-    lastTap = now;
-    clearTimeout(tapTimer);
-    tapTimer = setTimeout(() => stage.classList.contains("hide-ctl") ? poke() : hideControls(), 250);
+    if (Math.hypot(dx, dy) > 12) return;
+    if (e.pointerType === "mouse") { togglePlay(); flashBezel(video.paused ? "pause" : "play"); return; }
+    tapAt(e.clientX - tapLayer.getBoundingClientRect().left);
   });
-  tapLayer.addEventListener("dblclick", e => e.preventDefault());
+  tapLayer.addEventListener("pointercancel", () => {
+    if (!down) return;
+    clearTimeout(down.timer);
+    if (down.held) holdFast(false);
+    down = null;
+  });
+  tapLayer.addEventListener("dblclick", e => { e.preventDefault(); if (lastType === "mouse") toggleFull(); });
+  stage.addEventListener("contextmenu", e => { if (!e.target.closest(".sub")) e.preventDefault(); }); // holding is 2×, not a menu
+  screenBox.addEventListener("pointermove", e => { if (e.pointerType === "mouse") poke(); });
+  screenBox.addEventListener("mouseleave", () => hideControls());
 
-  // ---- seek bar ----
-  seek.addEventListener("input", () => { player.seeking = true; time.textContent = clock(seek.value) + " / " + clock(video.duration); paintSeek(); poke(); });
-  seek.addEventListener("change", () => { video.currentTime = Number(seek.value); player.seeking = false; poke(); });
+  function tapAt(x) {
+    const width = tapLayer.clientWidth, side = x < width * 0.4 ? -1 : x > width * 0.6 ? 1 : 0, now = Date.now();
+    const streak = player.streak;
+    if (streak && streak.side === side && now - streak.at < 800) { streak.at = now; skipOn(side); return; }
+    if (side !== 0 && lastTap.side === side && now - lastTap.at < 300) {
+      clearTimeout(tapTimer);
+      lastTap = { at: 0, side: 0 };
+      player.streak = { side, at: now, total: 0, timer: 0 };
+      skipOn(side);
+      return;
+    }
+    lastTap = { at: now, side };
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(() => stage.classList.contains("hide-ctl") ? poke() : hideControls(true), 300);
+  }
+
+  // ---- seek bar: drag (or tap) to seek; the time and the subtitle line there show above it ----
+  const fraction = e => { const r = scrub.getBoundingClientRect(); return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)); };
+  scrub.addEventListener("pointerdown", e => {
+    if (e.button > 0 || !video.duration) return;
+    e.stopPropagation();
+    scrub.setPointerCapture(e.pointerId);
+    player.seeking = true;
+    scrub.classList.add("drag");
+    scrubTo(fraction(e));
+    poke();
+  });
+  scrub.addEventListener("pointermove", e => {
+    if (player.seeking) { scrubTo(fraction(e)); poke(); }
+    else if (e.pointerType === "mouse" && video.duration) { scrub.classList.add("hover"); showTip(fraction(e)); }
+  });
+  scrub.addEventListener("pointerup", e => {
+    if (!player.seeking) return;
+    player.seeking = false;
+    scrub.classList.remove("drag");
+    video.currentTime = fraction(e) * video.duration;
+    poke();
+  });
+  scrub.addEventListener("pointercancel", () => { player.seeking = false; scrub.classList.remove("drag"); updateTime(); });
+  scrub.addEventListener("mouseleave", () => scrub.classList.remove("hover"));
 
   // ---- the video ----
   video.addEventListener("loadedmetadata", () => {
-    seek.max = video.duration || 1;
     if (data.resume > 5) {
       video.currentTime = data.resume;
       toast("Xem tiếp từ " + clock(data.resume) + " · kéo thanh thời gian để xem từ đầu");
@@ -811,22 +991,28 @@ async function openPlayer(id, push = true) {
     updateTime();
   });
   video.addEventListener("timeupdate", () => { updateTime(); renderLine(); });
-  video.addEventListener("progress", paintSeek);
+  video.addEventListener("progress", () => { if (!player.seeking) paintSeek(); });
   video.addEventListener("seeked", () => { updateTime(); renderLine(); });
   video.addEventListener("waiting", () => stage.classList.add("loading"));
   video.addEventListener("canplay", () => stage.classList.remove("loading"));
-  video.addEventListener("playing", () => { stage.classList.remove("loading"); poke(); });
-  video.addEventListener("play", () => { playButton.textContent = "❚❚"; player.ended = false; endBox.hidden = true; poke(); });
-  video.addEventListener("pause", () => { playButton.textContent = "▶"; showControls(); saveProgress(); });
+  video.addEventListener("playing", () => stage.classList.remove("loading")); // a seek while hidden leaves the controls hidden
+  video.addEventListener("play", () => {
+    player.ended = false;
+    player.keepEnd = false;
+    stopCountdown();
+    stage.classList.remove("ended");
+    endBox.hidden = true;
+    setPlayIcons("pause");
+    poke();
+  });
+  video.addEventListener("pause", () => { if (!video.ended) setPlayIcons("play"); showControls(); saveProgress(); });
   video.addEventListener("ended", () => {
     player.ended = true;
     saveProgress(true);
-    endBox.replaceChildren(
-      h("div", { style: "font-weight:700" }, "Hết tập"),
-      data.next ? h("button", { class: "btn", onclick: () => openPlayer(data.next.id, false) }, "▶ Tập tiếp: " + data.next.name) : null,
-      h("button", { class: "btn", style: "background:#1E2130", onclick: () => { video.currentTime = 0; video.play(); } }, "↺ Xem lại"));
-    endBox.hidden = false;
+    setPlayIcons("replay");
+    showEnd();
   });
+  video.addEventListener("volumechange", () => setIcon(muteButton, video.muted || video.volume === 0 ? "mute" : "vol"));
   video.addEventListener("error", () => {
     stage.classList.remove("loading");
     sub.className = "sub empty";
@@ -838,8 +1024,8 @@ async function openPlayer(id, push = true) {
   video.play().catch(() => { stage.classList.remove("loading"); /* needs a tap on ▶ first */ });
 }
 
-/** Subtitle sizes for the "Aa" button; the phone remembers the one chosen. */
-const SubSizes = [["nhỏ", 0.85], ["vừa", 1], ["lớn", 1.2]];
+/** Subtitle sizes (⚙ → Cỡ chữ phụ đề); the phone remembers the one chosen. */
+const SubSizes = [["Nhỏ", 0.85], ["Vừa", 1], ["Lớn", 1.2]];
 let subSize = (() => {
   try {
     const saved = localStorage.getItem("voca.subSize");
@@ -855,20 +1041,87 @@ function setSubSize(index, say) {
   if (say) toast("Cỡ phụ đề: " + SubSizes[index][0]);
 }
 
+function setAutoNext(on) {
+  autoNext = on;
+  try { localStorage.setItem("voca.autoNext", on ? "1" : "0"); } catch { }
+}
+
 function togglePlay() {
   if (!player) return;
   const v = player.video;
   if (v.paused || v.ended) v.play().catch(() => {}); else v.pause();
 }
 
-function skip(seconds) {
-  const { video, flashLeft, flashRight } = player;
+function setPlayIcons(name) { for (const b of player.playButtons) setIcon(b, name); }
+
+function toggleSubs() {
+  if (!player) return;
+  player.showSubs = !player.showSubs;
+  for (const b of player.ccButtons) b.classList.toggle("on", player.showSubs);
+  renderLine(true);
+}
+
+function toggleMute() {
+  const v = player.video;
+  v.muted = !v.muted;
+  flashBezel(v.muted ? "mute" : "vol");
+}
+
+function changeVolume(by) {
+  const v = player.video;
+  v.muted = false;
+  v.volume = Math.max(0, Math.min(1, Math.round((v.volume + by) * 100) / 100));
+  flashBezel(Math.round(v.volume * 100) + "%");
+}
+
+const Speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+const speedName = s => s === 1 ? "Chuẩn" : s + "×";
+
+function stepSpeed(by) {
+  const v = player.video;
+  const i = Speeds.indexOf(v.playbackRate);
+  v.playbackRate = Speeds[Math.max(0, Math.min(Speeds.length - 1, (i < 0 ? 3 : i) + by))];
+  flashBezel(v.playbackRate + "×");
+}
+
+/** Held down on the picture: 2× until let go. */
+function holdFast(on) {
+  const { video, pill } = player;
+  if (on) {
+    player.rateBeforeHold = video.playbackRate;
+    video.playbackRate = 2;
+    hideControls(true);
+  } else video.playbackRate = player.rateBeforeHold;
+  pill.classList.toggle("show", on);
+}
+
+/** Skips by some seconds and shows it in the half circle of that side (the total, while double tapping on). */
+function skip(seconds, total = Math.abs(seconds)) {
+  const { video, ripples } = player;
   video.currentTime = Math.max(0, Math.min((video.duration || 0) - 0.5, video.currentTime + seconds));
-  const flash = seconds < 0 ? flashLeft : flashRight;
-  flash.textContent = (seconds < 0 ? "« " : "") + Math.abs(seconds) + " giây" + (seconds > 0 ? " »" : "");
-  flash.classList.add("show");
-  setTimeout(() => flash.classList.remove("show"), 400);
-  poke();
+  const ripple = ripples[seconds < 0 ? -1 : 1];
+  ripple.lastChild.textContent = total + " giây";
+  ripple.classList.add("show");
+  clearTimeout(ripple.timer);
+  ripple.timer = setTimeout(() => ripple.classList.remove("show"), 700);
+}
+
+/** One more tap of a double tap streak on a side: 10 seconds more. */
+function skipOn(side) {
+  const streak = player.streak;
+  streak.total += 10;
+  skip(10 * side, streak.total);
+  clearTimeout(streak.timer);
+  streak.timer = setTimeout(() => { if (player && player.streak === streak) player.streak = null; }, 800);
+}
+
+/** What a key or a click did, in the middle of the picture (an icon, or a value such as "60%"). */
+function flashBezel(what) {
+  const bezel = player.bezel;
+  bezel.replaceChildren(Icons[what] ? icon(what) : String(what));
+  bezel.classList.remove("go");
+  void bezel.offsetWidth; // restarts the animation
+  bezel.classList.add("go");
 }
 
 /** Controls visible now; while playing they hide again after a few seconds without a touch. */
@@ -879,27 +1132,135 @@ function poke() {
   if (!player.video.paused) player.hideTimer = setTimeout(hideControls, 3000);
 }
 function showControls() { player && player.stage.classList.remove("hide-ctl"); }
-function hideControls() { if (player && !player.video.paused && !player.seeking) player.stage.classList.add("hide-ctl"); }
+/** Hides the controls while playing (or, tapped away, while paused too), but never while they are being used. */
+function hideControls(tapped) {
+  if (!player || player.seeking || player.menu || player.ended || (player.video.paused && tapped !== true)) return;
+  player.stage.classList.add("hide-ctl");
+}
 
 function updateTime() {
-  const { video, seek, time } = player;
+  const { video } = player;
   if (player.seeking) return;
-  seek.value = video.currentTime;
-  time.textContent = clock(video.currentTime) + " / " + clock(video.duration);
+  setTime(video.currentTime);
   paintSeek();
 }
 
-/** Played part violet, downloaded part lighter, on the seek bar. */
-function paintSeek() {
+function setTime(t) { player.time.replaceChildren(clock(t), h("span", {}, " / " + clock(player.video.duration))); }
+
+/** Played part red, downloaded part lighter, on the seek bar; at a given fraction while it is dragged. */
+function paintSeek(at) {
   if (!player) return;
-  const { video, seek } = player;
+  const { video, scrubDone, scrubLoad, knob } = player;
   const length = video.duration || 0;
   if (!length) return;
+  const played = at ?? video.currentTime / length;
   let loaded = 0;
   for (let i = 0; i < video.buffered.length; i++)
     if (video.buffered.start(i) <= video.currentTime + 1) loaded = Math.max(loaded, video.buffered.end(i));
-  seek.style.setProperty("--played", (Number(seek.value) / length * 100) + "%");
-  seek.style.setProperty("--loaded", (loaded / length * 100) + "%");
+  scrubDone.style.width = knob.style.left = played * 100 + "%";
+  scrubLoad.style.width = loaded / length * 100 + "%";
+}
+
+function scrubTo(at) {
+  paintSeek(at);
+  setTime(at * player.video.duration);
+  showTip(at);
+}
+
+/** Above the seek bar: the time there and the subtitle line said then. */
+function showTip(at) {
+  const { video, data, scrub, tip, tipTime, tipLine } = player;
+  const t = at * (video.duration || 0), i = lineAt(t);
+  tipTime.textContent = clock(t);
+  tipLine.textContent = i >= 0 ? data.lines[i].parts.map(p => p.t).join("") : "";
+  const width = scrub.clientWidth, half = tip.offsetWidth / 2;
+  tip.style.left = Math.max(half, Math.min(width - half, at * width)) + "px";
+}
+
+/** Full screen or landscape: the video fills the screen and the subtitle sits on it. */
+function layoutPlayer() {
+  player.stage.classList.toggle("big", player.full || WideScreen.matches);
+  setIcon(player.fullButton, player.full ? "unfull" : "full");
+}
+
+// ---------------------------------- the end of an episode ----------------------------------
+
+/** Replay, or the next episode, which plays after a 5 second countdown (unless Hủy, or ⚙ → Tự phát tập tiếp is off). */
+function showEnd() {
+  const { data, endBox, stage, video } = player;
+  stopCountdown();
+  stage.classList.add("ended");
+  showControls();
+  clearTimeout(player.hideTimer);
+  const again = () => { video.currentTime = 0; video.play().catch(() => {}); };
+  const next = data.next;
+  if (!next) {
+    endBox.replaceChildren(h("button", { class: "ring", "aria-label": "Xem lại", onclick: again }, icon("replay")), h("div", { class: "nm" }, "Hết tập"));
+  } else {
+    const counting = autoNext && !player.keepEnd;
+    const up = h("div", { class: "up" }, counting ? "Tập tiếp theo sau 5 giây" : "Tập tiếp theo");
+    const ring = h("button", { class: "ring" + (counting ? " count" : ""), "aria-label": "Phát tập tiếp", onclick: () => openPlayer(next.id, false) }, ringSvg(), icon("play"));
+    endBox.replaceChildren(up, h("div", { class: "nm" }, next.name), ring, h("div", { class: "acts" },
+      counting ? h("button", { onclick: () => { player.keepEnd = true; showEnd(); } }, "Hủy") : null,
+      h("button", { onclick: again }, "Xem lại")));
+    if (counting) {
+      let left = 5;
+      player.countdown = setInterval(() => {
+        if (--left > 0) { up.textContent = "Tập tiếp theo sau " + left + " giây"; return; }
+        stopCountdown();
+        if (player && player.ended) openPlayer(next.id, false);
+      }, 1000);
+    }
+  }
+  endBox.hidden = false;
+}
+
+function stopCountdown() {
+  if (!player) return;
+  clearInterval(player.countdown);
+  player.countdown = 0;
+}
+
+function ringSvg() {
+  const svg = document.createElementNS(SvgNs, "svg");
+  svg.setAttribute("viewBox", "0 0 64 64");
+  svg.setAttribute("class", "ring-svg");
+  const circle = document.createElementNS(SvgNs, "circle");
+  for (const [k, v] of Object.entries({ cx: 32, cy: 32, r: 30 })) circle.setAttribute(k, v);
+  svg.append(circle);
+  return svg;
+}
+
+// ---------------------------------- settings (⚙) ----------------------------------
+
+/** YouTube's settings sheet: Tốc độ phát, Phụ đề, Cỡ chữ phụ đề, Tự phát tập tiếp; a page per list of choices. */
+function openSettings(page) {
+  if (!player) return;
+  closeSettings(false);
+  const video = player.video;
+  const row = (name, label, value, action) => h("button", { onclick: action }, icon(name), h("span", {}, label), h("span", { class: "v" }, value));
+  const choice = (on, label, action) => h("button", { onclick: action }, h("span", { class: "ck" }, on ? "✓" : ""), h("span", {}, label));
+  const head = label => h("button", { class: "hd", onclick: () => openSettings() }, icon("back"), h("span", {}, label));
+  const items = page === "speed"
+    ? [head("Tốc độ phát"), ...Speeds.map(s => choice(video.playbackRate === s, speedName(s), () => { video.playbackRate = s; closeSettings(); }))]
+    : page === "size"
+      ? [head("Cỡ chữ phụ đề"), ...SubSizes.map(([name], i) => choice(i === subSize, name, () => { setSubSize(i, false); closeSettings(); }))]
+      : [row("speed", "Tốc độ phát", speedName(video.playbackRate), () => openSettings("speed")),
+         row("cc", "Phụ đề", player.showSubs ? "Bật" : "Tắt", () => { toggleSubs(); openSettings(); }),
+         row("text", "Cỡ chữ phụ đề", SubSizes[subSize][0], () => openSettings("size")),
+         row("next", "Tự phát tập tiếp", autoNext ? "Bật" : "Tắt", () => { setAutoNext(!autoNext); openSettings(); })];
+  const back = h("div", { class: "vset-back", onclick: () => closeSettings() });
+  const sheet = h("div", { class: "vset", role: "dialog", "aria-label": "Cài đặt" }, h("div", { class: "grab" }), ...items);
+  player.stage.append(back, sheet);
+  player.menu = [back, sheet];
+  showControls();
+}
+
+function closeSettings(resume = true) {
+  if (!player || !player.menu) return;
+  for (const el of player.menu) el.remove();
+  player.menu = null;
+  if (resume) poke();
 }
 
 /**
@@ -929,6 +1290,7 @@ function setFull(on) {
   if (!player) return;
   player.full = on;
   player.stage.classList.toggle("full", on);
+  layoutPlayer();
   const host = on ? player.stage : document.body;
   host.append($("#word-pop"), $("#toast"));
   if (!on && screen.orientation && screen.orientation.unlock) try { screen.orientation.unlock(); } catch { }
@@ -994,6 +1356,15 @@ function replayLine() {
   video.play().catch(() => {});
 }
 
+/** To the start of the next line. */
+function nextLine() {
+  const { video, data } = player;
+  const line = data.lines.find(l => l.s > video.currentTime + 0.3);
+  if (!line) return;
+  video.currentTime = line.s;
+  video.play().catch(() => {});
+}
+
 function saveProgress(final) {
   if (!player) return;
   const v = player.video;
@@ -1010,6 +1381,7 @@ function closePlayer({ back = true, reload = true } = {}) {
   const { video, timer, ended } = player;
   if (!ended) saveProgress();
   clearInterval(timer);
+  clearInterval(player.countdown);
   clearTimeout(player.hideTimer);
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   if (player.full) setFull(false);
@@ -1028,14 +1400,27 @@ function closePlayer({ back = true, reload = true } = {}) {
 
 window.addEventListener("popstate", () => {
   if (!player) return;
-  if (player.full) { toggleFull(); history.pushState({ player: player.id }, ""); return; } // Back leaves full screen first
+  // Back closes the settings sheet, then leaves full screen, then closes the player.
+  if (player.menu) { closeSettings(); history.pushState({ player: player.id }, ""); return; }
+  if (player.full) { toggleFull(); history.pushState({ player: player.id }, ""); return; }
   closePlayer({ back: false });
 });
 
+// YouTube's keys: Space / K play, J / L 10 seconds, ← / → 5 seconds, ↑ / ↓ volume, M mute, 0–9 to a tenth of the video,
+// < / > speed, F full screen, C subtitles, Esc closes the settings.
 document.addEventListener("keydown", e => {
-  if (!player || e.target.matches("input, select, textarea")) return;
-  const keys = { " ": () => togglePlay(), ArrowLeft: () => skip(-5), ArrowRight: () => skip(5), f: () => toggleFull(), c: () => { player.showSubs = !player.showSubs; renderLine(true); } };
-  if (keys[e.key]) { e.preventDefault(); keys[e.key](); }
+  if (!player || e.ctrlKey || e.metaKey || e.altKey || e.target.matches("input, select, textarea")) return;
+  const v = player.video;
+  const playPause = () => { togglePlay(); flashBezel(v.paused ? "pause" : "play"); };
+  const keys = {
+    " ": playPause, k: playPause, j: () => skip(-10), l: () => skip(10), ArrowLeft: () => skip(-5), ArrowRight: () => skip(5),
+    ArrowUp: () => changeVolume(0.05), ArrowDown: () => changeVolume(-0.05), m: () => toggleMute(),
+    "<": () => stepSpeed(-1), ">": () => stepSpeed(1), f: () => toggleFull(), c: () => toggleSubs(),
+    Escape: () => player.menu ? closeSettings() : player.full && toggleFull(),
+  };
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (/^[0-9]$/.test(key) && v.duration) keys[key] = () => { v.currentTime = v.duration * Number(key) / 10; poke(); };
+  if (keys[key]) { e.preventDefault(); keys[key](); }
 });
 
 // A word tapped in the subtitle: the video pauses and a card shows the meaning (or offers to save a new word).
